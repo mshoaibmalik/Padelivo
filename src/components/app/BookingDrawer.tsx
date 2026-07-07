@@ -350,20 +350,22 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                         <Row k="Transaction ID" v={<span className="font-mono">{payment.transactionId}</span>} />
                       )}
                       <Row k="Submitted" v={fmtDate(payment.submittedISO)} />
-                      <div className="pt-2">
-                        <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-mute mb-2">
-                          Screenshot
-                        </div>
-                        <div 
-                          className="flex h-32 w-full items-center justify-center rounded-md border border-line-soft bg-card cursor-pointer hover:opacity-80"
-                          style={{ background: payment.screenshotColor }}
-                        >
-                          <div className="text-center text-white/70">
-                            <ImageIcon className="mx-auto h-8 w-8" />
-                            <div className="mt-1 text-xs">Payment Screenshot</div>
+                      {(payment.method === "JazzCash" || payment.method === "EasyPaisa" || payment.method === "Bank Transfer") && (
+                        <div className="pt-2">
+                          <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-ink-mute mb-2">
+                            Screenshot
+                          </div>
+                          <div 
+                            className="flex h-32 w-full items-center justify-center rounded-md border border-line-soft bg-card cursor-pointer hover:opacity-80"
+                            style={{ background: payment.screenshotColor }}
+                          >
+                            <div className="text-center text-white/70">
+                              <ImageIcon className="mx-auto h-8 w-8" />
+                              <div className="mt-1 text-xs">Payment Screenshot</div>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 );

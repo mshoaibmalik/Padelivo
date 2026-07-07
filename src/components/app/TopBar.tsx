@@ -9,7 +9,6 @@ const TITLES: Record<string, string> = {
   "/customers": "Customers",
   "/payments": "Payments",
   "/reports": "Reports",
-  "/settings": "Settings",
 };
 
 export function TopBar({ onOpenNav }: { onOpenNav: () => void }) {

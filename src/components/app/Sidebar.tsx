@@ -6,7 +6,6 @@ import {
   LayoutGrid,
   Users,
   BarChart3,
-  Settings,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,7 +20,6 @@ const NAV = [
   { to: "/courts", label: "Courts", icon: LayoutGrid },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/reports", label: "Reports", icon: BarChart3 },
-  { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {

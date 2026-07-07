@@ -131,12 +131,12 @@
   --status-reserved-fg: oklch(0.45 0.12 75);
   --status-payment: oklch(0.94 0.04 250);
   --status-payment-fg: oklch(0.42 0.14 255);
-  --status-booked: oklch(0.94 0.04 40);
-  --status-booked-fg: oklch(0.5 0.14 40);
-  --status-checkedin: oklch(0.93 0.05 300);
-  --status-checkedin-fg: oklch(0.44 0.14 300);
-  --status-completed: oklch(0.94 0.005 60);
-  --status-completed-fg: oklch(0.35 0.008 60);
+  --status-booked: oklch(0.95 0.08 85);
+  --status-booked-fg: oklch(0.45 0.15 85);
+  --status-checkedin: oklch(0.92 0.06 130);
+  --status-checkedin-fg: oklch(0.35 0.12 130);
+  --status-completed: oklch(0.88 0.08 145);
+  --status-completed-fg: oklch(0.25 0.1 145);
   --status-cancelled: oklch(0.94 0.02 25);
   --status-cancelled-fg: oklch(0.5 0.16 25);
 }
@@ -186,12 +186,12 @@
   --status-reserved-fg: oklch(0.85 0.13 80);
   --status-payment: oklch(0.28 0.08 250);
   --status-payment-fg: oklch(0.82 0.13 250);
-  --status-booked: oklch(0.3 0.08 40);
-  --status-booked-fg: oklch(0.85 0.13 40);
-  --status-checkedin: oklch(0.3 0.09 300);
-  --status-checkedin-fg: oklch(0.83 0.13 300);
-  --status-completed: oklch(0.26 0.006 60);
-  --status-completed-fg: oklch(0.78 0.008 60);
+  --status-booked: oklch(0.3 0.1 85);
+  --status-booked-fg: oklch(0.9 0.18 85);
+  --status-checkedin: oklch(0.28 0.08 130);
+  --status-checkedin-fg: oklch(0.85 0.15 130);
+  --status-completed: oklch(0.25 0.1 145);
+  --status-completed-fg: oklch(0.88 0.15 145);
   --status-cancelled: oklch(0.3 0.09 25);
   --status-cancelled-fg: oklch(0.85 0.14 25);
 }
