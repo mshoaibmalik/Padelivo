@@ -1,5 +1,13 @@
 import { createContext, useContext, useMemo, useReducer, type ReactNode } from "react";
-import { buildSeed, type Booking, type Court, type Customer, type Payment, type Activity, type MaintenanceSlot } from "@/data/seed";
+import {
+  buildSeed,
+  type Booking,
+  type Court,
+  type Customer,
+  type Payment,
+  type Activity,
+  type MaintenanceSlot,
+} from "@/data/seed";
 import type { BookingStatus } from "@/lib/status";
 
 type State = {
@@ -28,7 +36,12 @@ type Action =
 
 const pushActivity = (state: State, msg: string, kind: Activity["kind"]): Activity[] =>
   [
-    { id: `A-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, kind, message: msg, at: new Date().toISOString() },
+    {
+      id: `A-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      kind,
+      message: msg,
+      at: new Date().toISOString(),
+    },
     ...state.activity,
   ].slice(0, 60);
 
@@ -36,7 +49,7 @@ const reducer = (state: State, action: Action): State => {
   switch (action.type) {
     case "set_booking_status": {
       const bookings = state.bookings.map((b) =>
-        b.id === action.id ? { ...b, status: action.status } : b
+        b.id === action.id ? { ...b, status: action.status } : b,
       );
       const b = bookings.find((x) => x.id === action.id);
       const cust = state.customers.find((c) => c.id === b?.customerId);
@@ -44,28 +57,46 @@ const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         bookings,
-        activity: pushActivity(state, `${cust?.name ?? "Booking"} → ${label} (${action.id})`, action.status === "cancelled" ? "cancel" : action.status === "checked_in" ? "checkin" : "booking"),
+        activity: pushActivity(
+          state,
+          `${cust?.name ?? "Booking"} → ${label} (${action.id})`,
+          action.status === "cancelled"
+            ? "cancel"
+            : action.status === "checked_in"
+              ? "checkin"
+              : "booking",
+        ),
       };
     }
     case "verify_payment": {
       const payments = state.payments.map((p) =>
-        p.id === action.paymentId ? { ...p, status: "verified" as const } : p
+        p.id === action.paymentId ? { ...p, status: "verified" as const } : p,
       );
       const p = payments.find((x) => x.id === action.paymentId);
       const bookings = state.bookings.map((b) =>
-        b.id === p?.bookingId ? { ...b, status: "booked" as BookingStatus } : b
+        b.id === p?.bookingId ? { ...b, status: "booked" as BookingStatus } : b,
       );
-      return { ...state, payments, bookings, activity: pushActivity(state, `Payment ${action.paymentId} verified`, "payment") };
+      return {
+        ...state,
+        payments,
+        bookings,
+        activity: pushActivity(state, `Payment ${action.paymentId} verified`, "payment"),
+      };
     }
     case "reject_payment": {
       const payments = state.payments.map((p) =>
-        p.id === action.paymentId ? { ...p, status: "rejected" as const } : p
+        p.id === action.paymentId ? { ...p, status: "rejected" as const } : p,
       );
       const p = payments.find((x) => x.id === action.paymentId);
       const bookings = state.bookings.map((b) =>
-        b.id === p?.bookingId ? { ...b, status: "reserved" as BookingStatus } : b
+        b.id === p?.bookingId ? { ...b, status: "reserved" as BookingStatus } : b,
       );
-      return { ...state, payments, bookings, activity: pushActivity(state, `Payment ${action.paymentId} rejected`, "payment") };
+      return {
+        ...state,
+        payments,
+        bookings,
+        activity: pushActivity(state, `Payment ${action.paymentId} rejected`, "payment"),
+      };
     }
     case "create_booking": {
       return {
@@ -86,7 +117,7 @@ const reducer = (state: State, action: Action): State => {
         courts: state.courts.map((c) =>
           c.id === action.courtId
             ? { ...c, status: c.status === "active" ? "maintenance" : "active" }
-            : c
+            : c,
         ),
       };
     }
@@ -94,7 +125,7 @@ const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         customers: state.customers.map((c) =>
-          c.id === action.customerId ? { ...c, notes: action.notes } : c
+          c.id === action.customerId ? { ...c, notes: action.notes } : c,
         ),
       };
     }
@@ -116,7 +147,11 @@ const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         maintenanceSlots: [action.slot, ...state.maintenanceSlots],
-        activity: pushActivity(state, `Maintenance scheduled for court ${action.slot.courtId}`, "maintenance"),
+        activity: pushActivity(
+          state,
+          `Maintenance scheduled for court ${action.slot.courtId}`,
+          "maintenance",
+        ),
       };
     }
     case "delete_maintenance_slot": {

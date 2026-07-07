@@ -18,9 +18,10 @@ export function Button({
         variant === "primary" && "bg-ink text-primary-foreground hover:bg-ink/90",
         variant === "secondary" && "border border-line bg-card text-ink hover:bg-secondary",
         variant === "ghost" && "text-ink-soft hover:bg-secondary hover:text-ink",
-        variant === "danger" && "border border-destructive/30 bg-card text-destructive hover:bg-destructive/10",
+        variant === "danger" &&
+          "border border-destructive/30 bg-card text-destructive hover:bg-destructive/10",
         variant === "clay" && "bg-clay text-white hover:bg-clay/90",
-        className
+        className,
       )}
       {...rest}
     />

@@ -20,10 +20,7 @@ export function Avatar({
   const hue = hueFor(name);
   return (
     <span
-      className={cn(
-        "inline-flex items-center justify-center rounded-full font-medium",
-        className
-      )}
+      className={cn("inline-flex items-center justify-center rounded-full font-medium", className)}
       style={{
         width: size,
         height: size,

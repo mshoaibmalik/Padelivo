@@ -128,8 +128,8 @@ function LoginPage() {
               <span className="italic text-clay">accounted for.</span>
             </div>
             <p className="mt-6 max-w-md text-sm text-white/60">
-              Four courts, 220+ weekly reservations, one calm interface.
-              Reserve, verify, check-in, complete — without leaving the desk.
+              One court, 300+ monthly reservations, one calm interface. Reserve, verify, check-in,
+              complete — without leaving the desk.
             </p>
           </div>
           <div className="flex items-center gap-6 text-[11px] uppercase tracking-[0.14em] text-white/40">

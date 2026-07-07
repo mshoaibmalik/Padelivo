@@ -16,100 +16,185 @@ import {
   Line,
 } from "recharts";
 import { useClub } from "@/context/ClubContext";
+import { useSettings } from "@/context/SettingsContext";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardHeader } from "@/components/app/Card";
 import { StatCard } from "@/components/app/StatCard";
 import { Avatar } from "@/components/app/Avatar";
 import { PKR, PKRShort } from "@/lib/format";
-import { HOURS_OF_DAY } from "@/data/seed";
 
 export const Route = createFileRoute("/_authenticated/reports")({
   head: () => ({
     meta: [
       { title: "Reports — Baseline" },
-      { name: "description", content: "Revenue, occupancy, peak hours and top members." },
+      { name: "description", content: "Revenue, occupancy, peak hours and performance metrics." },
     ],
   }),
   component: ReportsPage,
 });
 
-const CHART_COLORS = [
-  "oklch(0.6 0.14 40)",
-  "oklch(0.45 0.09 210)",
-  "oklch(0.65 0.11 155)",
-  "oklch(0.72 0.13 80)",
-  "oklch(0.5 0.14 300)",
-];
+const CHART_COLORS = ["oklch(0.6 0.14 40)", "oklch(0.45 0.09 210)"];
+
+const timeToMins = (t: string) => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
 
 function ReportsPage() {
   const { state } = useClub();
+  const { settings } = useSettings();
 
-  const revenueChart = state.revenueHistory.map((r) => ({
-    date: r.date.slice(5),
-    revenue: r.revenue,
-  }));
-  const totalRevenue = revenueChart.reduce((s, r) => s + r.revenue, 0);
-  const totalBookings = state.bookings.filter((b) => b.status !== "cancelled").length;
-  const occupancy = Math.round(
-    (totalBookings /
-      (state.courts.length * HOURS_OF_DAY.length * revenueChart.length || 1)) *
-      100
-  );
-
-  const peakData = useMemo(() => {
-    return HOURS_OF_DAY.map((h) => ({
-      hour: h.slice(0, 2),
-      bookings: state.bookings.filter((b) => b.startTime === h && b.status !== "cancelled").length,
-    }));
+  const activeBookings = useMemo(() => {
+    return state.bookings.filter((b) => b.status !== "cancelled");
   }, [state.bookings]);
 
-  const paymentBreakdown = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const p of state.payments.filter((x) => x.status === "verified")) {
-      m.set(p.method, (m.get(p.method) ?? 0) + p.amount);
+  // Daily revenue data from the history
+  const revenueChart = useMemo(() => {
+    return state.revenueHistory.map((r) => ({
+      date: r.date.slice(5),
+      revenue: r.revenue,
+    }));
+  }, [state.revenueHistory]);
+
+  // Monthly Revenue (sum of last 30 days)
+  const monthlyRevenue = useMemo(() => {
+    return state.revenueHistory.reduce((sum, r) => sum + r.revenue, 0);
+  }, [state.revenueHistory]);
+
+  // Average Daily Revenue
+  const avgDailyRevenue = useMemo(() => {
+    return state.revenueHistory.length
+      ? Math.round(monthlyRevenue / state.revenueHistory.length)
+      : 0;
+  }, [state.revenueHistory, monthlyRevenue]);
+
+  // Occupancy %: ratio of booked hours to total operational capacity over 30 days
+  const occupancyPct = useMemo(() => {
+    const daysCount = state.revenueHistory.length || 30;
+    const startMins = timeToMins(settings.openingTime || "07:00");
+    const endMins = timeToMins(settings.closingTime || "23:00");
+    const operatingHoursPerDay = (endMins - startMins) / 60;
+    const totalCapacityHours = daysCount * operatingHoursPerDay;
+
+    // Sum booked hours in the 30-day range
+    const dates = new Set(state.revenueHistory.map((r) => r.date));
+    const bookedHours = state.bookings
+      .filter((b) => b.status !== "cancelled" && dates.has(b.date))
+      .reduce((sum, b) => sum + b.durationHours, 0);
+
+    return Math.min(100, Math.round((bookedHours / (totalCapacityHours || 1)) * 100));
+  }, [state.bookings, state.revenueHistory, settings.openingTime, settings.closingTime]);
+
+  // Average Booking Duration
+  const avgBookingDuration = useMemo(() => {
+    return activeBookings.length
+      ? (
+          activeBookings.reduce((sum, b) => sum + b.durationHours, 0) / activeBookings.length
+        ).toFixed(1)
+      : "0";
+  }, [activeBookings]);
+
+  // Average Players per Booking
+  const avgPlayersPerBooking = useMemo(() => {
+    return activeBookings.length
+      ? (
+          activeBookings.reduce((sum, b) => sum + b.totalPlayers, 0) / activeBookings.length
+        ).toFixed(1)
+      : "0";
+  }, [activeBookings]);
+
+  // Revenue by Customer Type (Residents vs Outsiders)
+  const customerTypeRevenue = useMemo(() => {
+    let residentTotal = 0;
+    let outsiderTotal = 0;
+    const resRate = settings.residentRate;
+    const outRate = settings.outsiderRate;
+
+    for (const b of activeBookings) {
+      if (b.status !== "reserved") {
+        residentTotal += b.residents * resRate * b.durationHours;
+        outsiderTotal += b.outsiders * outRate * b.durationHours;
+      }
     }
-    return Array.from(m.entries()).map(([name, value]) => ({ name, value }));
-  }, [state.payments]);
+
+    return [
+      { name: "Residents", value: residentTotal },
+      { name: "Outsiders", value: outsiderTotal },
+    ];
+  }, [activeBookings, settings.residentRate, settings.outsiderRate]);
+
+  // Peak hours log
+  const peakData = useMemo(() => {
+    const list = Array.from({ length: 24 }, (_, i) => {
+      const hStr = `${String(i).padStart(2, "0")}:00`;
+      return {
+        hour: hStr,
+        bookings: activeBookings.filter((b) => b.startTime === hStr).length,
+      };
+    });
+    // Filter to only display hours within operating bounds
+    const startH = Number(settings.openingTime.split(":")[0]);
+    const endH = Number(settings.closingTime.split(":")[0]);
+    return list.filter((item) => {
+      const h = Number(item.hour.split(":")[0]);
+      return h >= startH && h <= endH;
+    });
+  }, [activeBookings, settings.openingTime, settings.closingTime]);
 
   const topCustomers = useMemo(() => {
     return [...state.customers].sort((a, b) => b.totalSpend - a.totalSpend).slice(0, 6);
   }, [state.customers]);
 
-  const courtRevenue = useMemo(() => {
-    return state.courts.map((c) => ({
-      name: c.name.split(" — ")[0],
-      revenue: state.bookings
-        .filter((b) => b.courtId === c.id && b.status !== "cancelled" && b.status !== "reserved")
-        .reduce((s, b) => s + b.amount, 0),
-    }));
-  }, [state]);
-
   return (
     <>
       <PageHeader
-        eyebrow="Reports"
-        title="How the business is performing"
-        description="Rolling 30 days across revenue, occupancy, peak hours and members."
+        eyebrow="Business Intelligence"
+        title="Main Court Performance"
+        description="Analytics overview on revenue, average session lengths, occupancy splits, and peak hours."
       />
 
+      {/* Row 1 Stats */}
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Revenue (30d)" value={PKRShort(totalRevenue)} emphasis />
-        <StatCard label="Bookings" value={totalBookings} />
-        <StatCard label="Occupancy" value={`${occupancy}%`} />
+        <StatCard label="Monthly Revenue (30d)" value={PKRShort(monthlyRevenue)} emphasis />
+        <StatCard label="Daily Avg Revenue" value={PKR(avgDailyRevenue)} />
+        <StatCard label="Court Occupancy Rate" value={`${occupancyPct}%`} />
+        <StatCard label="Avg Booking Duration" value={`${avgBookingDuration} Hrs`} />
+      </div>
+
+      {/* Row 2 Stats */}
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Avg Players / Session" value={`${avgPlayersPerBooking} players`} />
         <StatCard
-          label="Avg. session"
-          value={PKR(Math.round(totalRevenue / Math.max(1, totalBookings))).replace("Rs ", "Rs ")}
+          label="Resident Share"
+          value={PKRShort(customerTypeRevenue[0].value)}
+          sub="of overall verified revenue"
         />
+        <StatCard
+          label="Outsider Share"
+          value={PKRShort(customerTypeRevenue[1].value)}
+          sub="of overall verified revenue"
+        />
+        <StatCard label="Total Active Bookings" value={activeBookings.length} />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Revenue Trend Area Chart */}
         <Card className="lg:col-span-2">
-          <CardHeader title="Revenue trend" subtitle="Rolling 30 days" />
+          <CardHeader
+            title="Daily Revenue Trend"
+            subtitle="Performance across the rolling 30 days"
+          />
           <div className="h-64 p-4">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={revenueChart}>
                 <CartesianGrid stroke="oklch(0.94 0.006 70)" vertical={false} />
-                <XAxis dataKey="date" stroke="oklch(0.55 0.008 60)" fontSize={11} tickLine={false} axisLine={false} />
+                <XAxis
+                  dataKey="date"
+                  stroke="oklch(0.55 0.008 60)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                />
                 <YAxis
                   stroke="oklch(0.55 0.008 60)"
                   fontSize={11}
@@ -119,29 +204,41 @@ function ReportsPage() {
                   width={38}
                 />
                 <Tooltip
-                  contentStyle={{ background: "white", border: "1px solid oklch(0.9 0.008 70)", borderRadius: 8, fontSize: 12 }}
+                  contentStyle={{
+                    background: "white",
+                    border: "1px solid oklch(0.9 0.008 70)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
                   formatter={(v: number) => [PKR(v), "Revenue"]}
                 />
-                <Line type="monotone" dataKey="revenue" stroke="oklch(0.6 0.14 40)" strokeWidth={1.75} dot={false} />
+                <Line
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="oklch(0.6 0.14 40)"
+                  strokeWidth={1.75}
+                  dot={false}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Card>
 
+        {/* Customer Type split (Pie Chart) */}
         <Card>
-          <CardHeader title="Payment methods" subtitle="Verified only" />
-          <div className="h-64 p-4">
+          <CardHeader title="Revenue by Customer Type" subtitle="Residents vs. Outsiders" />
+          <div className="h-64 p-4 flex flex-col justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={paymentBreakdown}
+                  data={customerTypeRevenue}
                   dataKey="value"
                   nameKey="name"
                   innerRadius={45}
                   outerRadius={75}
                   paddingAngle={2}
                 >
-                  {paymentBreakdown.map((_, i) => (
+                  {customerTypeRevenue.map((_, i) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Pie>
@@ -154,62 +251,68 @@ function ReportsPage() {
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Peak Hours distribution */}
         <Card className="lg:col-span-2">
-          <CardHeader title="Peak hours" subtitle="Bookings by start time" />
-          <div className="h-56 p-4">
+          <CardHeader title="Peak operating Hours" subtitle="Bookings based on start hours" />
+          <div className="h-64 p-4">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={peakData}>
                 <CartesianGrid stroke="oklch(0.94 0.006 70)" vertical={false} />
-                <XAxis dataKey="hour" stroke="oklch(0.55 0.008 60)" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="oklch(0.55 0.008 60)" fontSize={11} tickLine={false} axisLine={false} width={28} />
-                <Tooltip contentStyle={{ background: "white", border: "1px solid oklch(0.9 0.008 70)", borderRadius: 8, fontSize: 12 }} />
+                <XAxis
+                  dataKey="hour"
+                  stroke="oklch(0.55 0.008 60)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  stroke="oklch(0.55 0.008 60)"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  width={28}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "white",
+                    border: "1px solid oklch(0.9 0.008 70)",
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                />
                 <Bar dataKey="bookings" fill="oklch(0.6 0.14 40)" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Card>
 
+        {/* Top customers card */}
         <Card>
-          <CardHeader title="Revenue by court" />
-          <div className="space-y-3 p-5">
-            {courtRevenue.map((r) => {
-              const max = Math.max(...courtRevenue.map((x) => x.revenue), 1);
-              return (
-                <div key={r.name}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="text-ink">{r.name}</span>
-                    <span className="font-mono text-xs text-ink">{PKR(r.revenue)}</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-line-soft">
-                    <div
-                      className="h-full bg-clay"
-                      style={{ width: `${(r.revenue / max) * 100}%` }}
-                    />
+          <CardHeader title="Top Playing customers" subtitle="Lifetime spent split" />
+          <div className="divide-y divide-line-soft max-h-64 overflow-y-auto">
+            {topCustomers.map((c, i) => (
+              <div key={c.id} className="flex items-center justify-between p-3 text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-mono text-ink-mute font-semibold">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <Avatar name={c.name} size={24} />
+                  <div className="min-w-0">
+                    <div className="truncate text-ink font-semibold">{c.name}</div>
+                    <div className="text-[10px] text-ink-mute font-medium">{c.customerType}</div>
                   </div>
                 </div>
-              );
-            })}
+                <div className="text-right">
+                  <div className="font-semibold text-ink font-mono">
+                    Rs {c.totalSpend.toLocaleString("en-PK")}
+                  </div>
+                  <div className="text-[9px] text-ink-mute">{c.totalBookings} bookings</div>
+                </div>
+              </div>
+            ))}
           </div>
         </Card>
       </div>
-
-      <Card className="mt-6">
-        <CardHeader title="Top customers" subtitle="By lifetime spend" />
-        <div className="divide-y divide-line-soft">
-          {topCustomers.map((c, i) => (
-            <div key={c.id} className="grid grid-cols-[24px_auto_minmax(0,1fr)_auto_auto] items-center gap-3 px-5 py-3">
-              <span className="font-mono text-xs text-ink-mute tabular">{String(i + 1).padStart(2, "0")}</span>
-              <Avatar name={c.name} size={32} />
-              <div className="min-w-0">
-                <div className="truncate text-sm text-ink">{c.name}</div>
-                <div className="text-[11px] text-ink-mute">{c.membership}</div>
-              </div>
-              <div className="text-xs text-ink-mute tabular">{c.totalBookings} bookings</div>
-              <div className="font-mono text-sm text-ink">{PKR(c.totalSpend)}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
     </>
   );
 }

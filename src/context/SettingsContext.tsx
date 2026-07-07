@@ -7,6 +7,8 @@ export type Settings = {
   currency: "PKR";
   theme: "light" | "dark";
   clubName: string;
+  residentRate: number;
+  outsiderRate: number;
 };
 
 const DEFAULTS: Settings = {
@@ -16,6 +18,8 @@ const DEFAULTS: Settings = {
   currency: "PKR",
   theme: "light",
   clubName: "Baseline Padel — Lahore",
+  residentRate: 500,
+  outsiderRate: 1000,
 };
 
 type Ctx = {

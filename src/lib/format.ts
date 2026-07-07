@@ -1,5 +1,4 @@
-export const PKR = (n: number) =>
-  `Rs ${Math.round(n).toLocaleString("en-PK")}`;
+export const PKR = (n: number) => `Rs ${Math.round(n).toLocaleString("en-PK")}`;
 
 export const PKRShort = (n: number) => {
   if (n >= 100_000) return `Rs ${(n / 100_000).toFixed(1)}L`;

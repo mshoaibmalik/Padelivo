@@ -20,7 +20,7 @@ export function StatCard({
     <div
       className={cn(
         "relative rounded-xl border bg-card p-5 transition-colors",
-        emphasis ? "border-clay/30 bg-clay-soft/40" : "border-line-soft hover:border-line"
+        emphasis ? "border-clay/30 bg-clay-soft/40" : "border-line-soft hover:border-line",
       )}
     >
       <div className="flex items-start justify-between">
@@ -30,14 +30,12 @@ export function StatCard({
         {icon && <div className="text-ink-mute">{icon}</div>}
       </div>
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="font-display text-4xl tracking-tight text-ink tabular">
-          {value}
-        </span>
+        <span className="font-display text-4xl tracking-tight text-ink tabular">{value}</span>
         {trend && (
           <span
             className={cn(
               "text-xs font-medium tabular",
-              trend.positive ? "text-status-available-fg" : "text-destructive"
+              trend.positive ? "text-status-available-fg" : "text-destructive",
             )}
           >
             {trend.positive ? "↑" : "↓"} {trend.value}

@@ -4,10 +4,14 @@ import { motion } from "framer-motion";
 import {
   Wallet,
   CalendarCheck,
-  CircleDashed,
+  Clock,
   AlertCircle,
   Plus,
   ArrowUpRight,
+  TrendingUp,
+  Percent,
+  Timer,
+  UserCheck,
 } from "lucide-react";
 import {
   AreaChart,
@@ -19,6 +23,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { useClub } from "@/context/ClubContext";
+import { useSettings } from "@/context/SettingsContext";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StatCard } from "@/components/app/StatCard";
 import { Card, CardHeader } from "@/components/app/Card";
@@ -27,7 +32,6 @@ import { Avatar } from "@/components/app/Avatar";
 import { Button } from "@/components/app/Button";
 import { BookingDrawer } from "@/components/app/BookingDrawer";
 import { PKR, PKRShort, fmtDate, fmtTime, relativeTime, todayISO } from "@/lib/format";
-import { HOURS_OF_DAY } from "@/data/seed";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
@@ -39,51 +43,80 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
 });
 
+const timeToMins = (t: string) => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
+
 function DashboardPage() {
   const { state } = useClub();
+  const { settings } = useSettings();
   const [drawer, setDrawer] = useState<{ open: boolean; id: string | null }>({
     open: false,
     id: null,
   });
 
   const today = todayISO();
+
   const stats = useMemo(() => {
-    const todays = state.bookings.filter((b) => b.date === today);
-    const revenue = todays
-      .filter((b) => b.status !== "cancelled" && b.status !== "reserved")
-      .reduce((s, b) => s + b.amount, 0);
-    const bookedCount = todays.filter((b) => b.status !== "cancelled").length;
-    const totalSlots = state.courts.filter((c) => c.status === "active").length * HOURS_OF_DAY.length;
-    const usedSlots = todays.filter((b) => b.status !== "cancelled").length;
-    const availableSlots = Math.max(0, totalSlots - usedSlots);
-    const reserved = todays.filter((b) => b.status === "reserved").length;
-    const booked = todays.filter((b) => b.status === "booked" || b.status === "checked_in").length;
+    const todays = state.bookings.filter((b) => b.date === today && b.status !== "cancelled");
+    const revenue = todays.filter((b) => b.status !== "reserved").reduce((s, b) => s + b.amount, 0);
+
+    const bookedCount = todays.length;
+
+    // Total operational hours today
+    const startMins = timeToMins(settings.openingTime || "07:00");
+    const endMins = timeToMins(settings.closingTime || "23:00");
+    const totalOperatingHours = (endMins - startMins) / 60;
+
+    // Occupied hours
+    const occupiedHours = todays.reduce((s, b) => s + b.durationHours, 0);
+    const availableHours = Math.max(0, totalOperatingHours - occupiedHours);
+
+    // Reserved hours (unpaid/holding status)
+    const reservedHours = todays
+      .filter((b) => b.status === "reserved")
+      .reduce((s, b) => s + b.durationHours, 0);
+
     const pendingPayments = state.payments.filter((p) => p.status === "pending").length;
-    return { revenue, bookedCount, availableSlots, reserved, booked, pendingPayments };
-  }, [state, today]);
+
+    // Occupancy percentage
+    const occupancyPct = Math.min(
+      100,
+      Math.round((occupiedHours / (totalOperatingHours || 1)) * 100),
+    );
+
+    // Average booking duration across all non-cancelled bookings in the system
+    const allActive = state.bookings.filter((b) => b.status !== "cancelled");
+    const avgDuration = allActive.length
+      ? (allActive.reduce((s, b) => s + b.durationHours, 0) / allActive.length).toFixed(1)
+      : "0";
+
+    return {
+      revenue,
+      bookedCount,
+      availableHours,
+      reservedHours,
+      pendingPayments,
+      occupancyPct,
+      avgDuration,
+      occupiedHours,
+    };
+  }, [state, today, settings.openingTime, settings.closingTime]);
 
   const upcoming = useMemo(() => {
     const now = new Date();
     return state.bookings
       .filter(
         (b) =>
-          (b.date > today || (b.date === today && b.startTime > `${String(now.getHours()).padStart(2, "0")}:00`)) &&
+          (b.date > today ||
+            (b.date === today && b.startTime > `${String(now.getHours()).padStart(2, "0")}:00`)) &&
           b.status !== "cancelled" &&
-          b.status !== "completed"
+          b.status !== "completed",
       )
       .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
       .slice(0, 6);
   }, [state.bookings, today]);
-
-  const utilization = useMemo(() => {
-    return state.courts.map((c) => {
-      const todays = state.bookings.filter(
-        (b) => b.date === today && b.courtId === c.id && b.status !== "cancelled"
-      );
-      const pct = Math.min(100, Math.round((todays.length / HOURS_OF_DAY.length) * 100));
-      return { court: c, pct, bookings: todays.length };
-    });
-  }, [state, today]);
 
   const revenueChart = state.revenueHistory.slice(-14).map((r) => ({
     date: r.date.slice(5),
@@ -94,49 +127,79 @@ function DashboardPage() {
     <>
       <PageHeader
         eyebrow={fmtDate(today)}
-        title="What's happening today"
-        description="Live snapshot of revenue, court flow and things that need your attention."
+        title="Main Court Dashboard"
+        description="Live snapshot of the single-court availability, revenue stats, and customer traffic."
         actions={
           <Button variant="clay" onClick={() => setDrawer({ open: true, id: null })}>
-            <Plus className="h-4 w-4" /> New reservation
+            <Plus className="h-4 w-4" /> New Reservation
           </Button>
         }
       />
 
+      {/* Row 1 Stats */}
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          label="Today's revenue"
+          label="Today's Revenue"
           value={PKRShort(stats.revenue)}
-          sub={`${stats.bookedCount} bookings settled`}
-          trend={{ value: "12.4%", positive: true }}
+          sub={`${stats.bookedCount} active bookings`}
+          trend={{ value: "14.2%", positive: true }}
           icon={<Wallet className="h-4 w-4" />}
           emphasis
         />
         <StatCard
-          label="Today's bookings"
-          value={stats.bookedCount}
-          sub={`${stats.reserved} reserved · ${stats.booked} confirmed`}
+          label="Today's Bookings"
+          value={`${stats.bookedCount} slots`}
+          sub={`${stats.occupiedHours} hours reserved/played`}
           icon={<CalendarCheck className="h-4 w-4" />}
         />
         <StatCard
-          label="Available slots"
-          value={stats.availableSlots}
-          sub={`across ${state.courts.filter((c) => c.status === "active").length} active courts`}
-          icon={<CircleDashed className="h-4 w-4" />}
+          label="Available Hours Today"
+          value={`${stats.availableHours} hrs`}
+          sub={`from ${settings.openingTime} to ${settings.closingTime}`}
+          icon={<Clock className="h-4 w-4" />}
         />
         <StatCard
-          label="Pending payments"
+          label="Reserved Hours (Unpaid)"
+          value={`${stats.reservedHours} hrs`}
+          sub="awaiting payment actions"
+          icon={<Timer className="h-4 w-4" />}
+        />
+      </div>
+
+      {/* Row 2 Stats (New PRD additions) */}
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard
+          label="Today's Occupancy %"
+          value={`${stats.occupancyPct}%`}
+          sub="of total operating time"
+          icon={<Percent className="h-4 w-4 text-clay" />}
+        />
+        <StatCard
+          label="Average Booking Duration"
+          value={`${stats.avgDuration} hrs`}
+          sub="lifetime average duration"
+          icon={<Timer className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Pending Payments"
           value={stats.pendingPayments}
-          sub="awaiting verification"
+          sub="wallet verifications due"
           icon={<AlertCircle className="h-4 w-4" />}
+        />
+        <StatCard
+          label="Upcoming Bookings"
+          value={upcoming.length}
+          sub="scheduled next in queue"
+          icon={<UserCheck className="h-4 w-4" />}
         />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* Revenue Trend Area Chart */}
         <Card className="lg:col-span-2">
           <CardHeader
-            title="Revenue"
-            subtitle="Last 14 days"
+            title="Revenue Trend"
+            subtitle="Last 14 days performance"
             action={
               <span className="text-xs text-ink-mute">
                 <span className="font-mono text-ink">
@@ -192,41 +255,58 @@ function DashboardPage() {
           </div>
         </Card>
 
+        {/* Occupancy Card (Single Court visual summary) */}
         <Card>
-          <CardHeader title="Court utilization" subtitle="Today" />
-          <div className="space-y-4 p-5">
-            {utilization.map((u) => (
-              <div key={u.court.id}>
-                <div className="mb-1.5 flex items-center justify-between text-sm">
-                  <div className="min-w-0">
-                    <div className="truncate text-ink">{u.court.name}</div>
-                    <div className="text-[11px] text-ink-mute">
-                      {u.court.surface} · {u.bookings} bookings
-                    </div>
-                  </div>
-                  <span className="font-mono text-xs text-ink">{u.pct}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-line-soft">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${u.pct}%` }}
-                    transition={{ duration: 0.7, ease: "easeOut" }}
-                    className={
-                      u.court.status === "maintenance" ? "h-full bg-ink-mute" : "h-full bg-clay"
-                    }
-                  />
-                </div>
+          <CardHeader title="Today's Court Status" subtitle="Main Court" />
+          <div className="space-y-4 p-5 flex flex-col justify-between h-[230px]">
+            <div>
+              <div className="flex justify-between text-sm mb-1.5">
+                <span className="text-ink font-semibold">Timeline Allocation</span>
+                <span className="font-mono text-xs text-ink font-bold">
+                  {stats.occupancyPct}% Occupied
+                </span>
               </div>
-            ))}
+              <div className="h-2 overflow-hidden rounded-full bg-line-soft">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${stats.occupancyPct}%` }}
+                  transition={{ duration: 0.7, ease: "easeOut" }}
+                  className="h-full bg-clay"
+                />
+              </div>
+            </div>
+
+            <div className="bg-canvas p-3.5 rounded-lg border border-line-soft space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-ink-mute">Operating Limit</span>
+                <span className="text-ink font-semibold">
+                  {(timeToMins(settings.closingTime || "23:00") -
+                    timeToMins(settings.openingTime || "07:00")) /
+                    60}{" "}
+                  hours
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-mute">Time Booked Today</span>
+                <span className="text-ink font-semibold">{stats.occupiedHours} hours</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ink-mute">Time Available Today</span>
+                <span className="text-ink font-semibold text-status-available-fg">
+                  {stats.availableHours} hours
+                </span>
+              </div>
+            </div>
           </div>
         </Card>
       </div>
 
+      {/* Row 3 layout: Upcoming reservations & live audit log */}
       <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <CardHeader
-            title="Upcoming reservations"
-            subtitle="Next 6 that need attention"
+            title="Upcoming Bookings"
+            subtitle="Next active scheduled players"
             action={
               <a
                 href="/bookings"
@@ -239,7 +319,6 @@ function DashboardPage() {
           <div className="divide-y divide-line-soft">
             {upcoming.map((b) => {
               const cust = state.customers.find((c) => c.id === b.customerId);
-              const court = state.courts.find((c) => c.id === b.courtId);
               return (
                 <button
                   key={b.id}
@@ -252,7 +331,7 @@ function DashboardPage() {
                     <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-mute">
                       <span className="font-mono">{b.id}</span>
                       <span>·</span>
-                      <span>{court?.name}</span>
+                      <span className="text-clay font-medium">{cust?.customerType}</span>
                       <span>·</span>
                       <span className="tabular">
                         {fmtDate(b.date)} · {fmtTime(b.startTime)}
@@ -267,7 +346,7 @@ function DashboardPage() {
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader title="Recent activity" subtitle="Live log" />
+          <CardHeader title="Recent Activity" subtitle="Live club log" />
           <ol className="max-h-[380px] space-y-3 overflow-y-auto p-5">
             {state.activity.slice(0, 12).map((a) => (
               <li key={a.id} className="flex gap-3 text-sm">
@@ -284,7 +363,9 @@ function DashboardPage() {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="text-ink">{a.message}</div>
-                  <div className="mt-0.5 text-[11px] text-ink-mute tabular">{relativeTime(a.at)}</div>
+                  <div className="mt-0.5 text-[11px] text-ink-mute tabular">
+                    {relativeTime(a.at)}
+                  </div>
                 </div>
               </li>
             ))}

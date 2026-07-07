@@ -1,10 +1,5 @@
 export type BookingStatus =
-  | "reserved"
-  | "payment_submitted"
-  | "booked"
-  | "checked_in"
-  | "completed"
-  | "cancelled";
+  "reserved" | "payment_submitted" | "booked" | "checked_in" | "completed" | "cancelled";
 
 export const STATUS_META: Record<
   BookingStatus,

@@ -17,7 +17,6 @@ const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/bookings", label: "Bookings", icon: ClipboardList },
-  { to: "/courts", label: "Courts", icon: LayoutGrid },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/reports", label: "Reports", icon: BarChart3 },
 ] as const;
@@ -55,7 +54,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 "group flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
                 active
                   ? "bg-sidebar-accent text-white"
-                  : "text-white/70 hover:bg-sidebar-accent/60 hover:text-white"
+                  : "text-white/70 hover:bg-sidebar-accent/60 hover:text-white",
               )}
             >
               <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
