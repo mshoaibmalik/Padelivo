@@ -1,0 +1,216 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Padel Club Management System — design tokens.
+ * Editorial + operator-grade: warm off-white canvas, deep ink, single clay
+ * accent, disciplined 7-state booking status palette used everywhere.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-canvas: var(--canvas);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-mute: var(--ink-mute);
+  --color-clay: var(--clay);
+  --color-clay-soft: var(--clay-soft);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-status-available: var(--status-available);
+  --color-status-available-fg: var(--status-available-fg);
+  --color-status-reserved: var(--status-reserved);
+  --color-status-reserved-fg: var(--status-reserved-fg);
+  --color-status-payment: var(--status-payment);
+  --color-status-payment-fg: var(--status-payment-fg);
+  --color-status-booked: var(--status-booked);
+  --color-status-booked-fg: var(--status-booked-fg);
+  --color-status-checkedin: var(--status-checkedin);
+  --color-status-checkedin-fg: var(--status-checkedin-fg);
+  --color-status-completed: var(--status-completed);
+  --color-status-completed-fg: var(--status-completed-fg);
+  --color-status-cancelled: var(--status-cancelled);
+  --color-status-cancelled-fg: var(--status-cancelled-fg);
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+:root {
+  --radius: 0.625rem;
+  /* Warm off-white canvas */
+  --canvas: oklch(0.983 0.005 85);
+  --ink: oklch(0.18 0.01 60);
+  --ink-soft: oklch(0.36 0.008 60);
+  --ink-mute: oklch(0.55 0.008 60);
+  --line: oklch(0.9 0.008 70);
+  --line-soft: oklch(0.94 0.006 70);
+  --clay: oklch(0.6 0.14 40);
+  --clay-soft: oklch(0.93 0.04 45);
+
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--ink);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: oklch(0.985 0.003 85);
+  --secondary: oklch(0.96 0.006 70);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.96 0.006 70);
+  --muted-foreground: var(--ink-mute);
+  --accent: var(--clay-soft);
+  --accent-foreground: var(--clay);
+  --destructive: oklch(0.55 0.2 27);
+  --destructive-foreground: oklch(0.985 0.003 85);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--clay);
+  --chart-1: oklch(0.6 0.14 40);
+  --chart-2: oklch(0.45 0.09 210);
+  --chart-3: oklch(0.65 0.11 155);
+  --chart-4: oklch(0.72 0.13 80);
+  --chart-5: oklch(0.5 0.14 300);
+
+  --sidebar: oklch(0.13 0.008 60);
+  --sidebar-foreground: oklch(0.82 0.008 60);
+  --sidebar-primary: var(--clay);
+  --sidebar-primary-foreground: oklch(0.99 0.003 85);
+  --sidebar-accent: oklch(0.2 0.008 60);
+  --sidebar-accent-foreground: oklch(0.99 0.003 85);
+  --sidebar-border: oklch(0.22 0.008 60);
+  --sidebar-ring: var(--clay);
+
+  /* Booking status palette — soft bg + strong fg per state */
+  --status-available: oklch(0.96 0.01 150);
+  --status-available-fg: oklch(0.4 0.09 155);
+  --status-reserved: oklch(0.95 0.03 80);
+  --status-reserved-fg: oklch(0.45 0.12 75);
+  --status-payment: oklch(0.94 0.04 250);
+  --status-payment-fg: oklch(0.42 0.14 255);
+  --status-booked: oklch(0.94 0.04 40);
+  --status-booked-fg: oklch(0.5 0.14 40);
+  --status-checkedin: oklch(0.93 0.05 300);
+  --status-checkedin-fg: oklch(0.44 0.14 300);
+  --status-completed: oklch(0.94 0.005 60);
+  --status-completed-fg: oklch(0.35 0.008 60);
+  --status-cancelled: oklch(0.94 0.02 25);
+  --status-cancelled-fg: oklch(0.5 0.16 25);
+}
+
+.dark {
+  --canvas: oklch(0.16 0.008 60);
+  --ink: oklch(0.97 0.005 85);
+  --ink-soft: oklch(0.8 0.008 60);
+  --ink-mute: oklch(0.62 0.008 60);
+  --line: oklch(0.28 0.008 60);
+  --line-soft: oklch(0.22 0.008 60);
+  --clay: oklch(0.68 0.14 40);
+  --clay-soft: oklch(0.28 0.06 40);
+
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --card: oklch(0.2 0.008 60);
+  --card-foreground: var(--ink);
+  --popover: oklch(0.2 0.008 60);
+  --popover-foreground: var(--ink);
+  --primary: oklch(0.97 0.005 85);
+  --primary-foreground: oklch(0.18 0.008 60);
+  --secondary: oklch(0.24 0.008 60);
+  --secondary-foreground: var(--ink);
+  --muted: oklch(0.24 0.008 60);
+  --muted-foreground: var(--ink-mute);
+  --accent: oklch(0.28 0.06 40);
+  --accent-foreground: oklch(0.85 0.1 45);
+  --destructive: oklch(0.6 0.2 27);
+  --destructive-foreground: oklch(0.99 0.003 85);
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--clay);
+
+  --sidebar: oklch(0.11 0.008 60);
+  --sidebar-foreground: oklch(0.82 0.008 60);
+  --sidebar-primary: var(--clay);
+  --sidebar-primary-foreground: oklch(0.99 0.003 85);
+  --sidebar-accent: oklch(0.18 0.008 60);
+  --sidebar-accent-foreground: oklch(0.99 0.003 85);
+  --sidebar-border: oklch(0.2 0.008 60);
+  --sidebar-ring: var(--clay);
+
+  --status-available: oklch(0.28 0.04 150);
+  --status-available-fg: oklch(0.85 0.11 155);
+  --status-reserved: oklch(0.3 0.06 80);
+  --status-reserved-fg: oklch(0.85 0.13 80);
+  --status-payment: oklch(0.28 0.08 250);
+  --status-payment-fg: oklch(0.82 0.13 250);
+  --status-booked: oklch(0.3 0.08 40);
+  --status-booked-fg: oklch(0.85 0.13 40);
+  --status-checkedin: oklch(0.3 0.09 300);
+  --status-checkedin-fg: oklch(0.83 0.13 300);
+  --status-completed: oklch(0.26 0.006 60);
+  --status-completed-fg: oklch(0.78 0.008 60);
+  --status-cancelled: oklch(0.3 0.09 25);
+  --status-cancelled-fg: oklch(0.85 0.14 25);
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
+  .font-mono { font-family: var(--font-mono); }
+  .tabular { font-variant-numeric: tabular-nums; }
+}
