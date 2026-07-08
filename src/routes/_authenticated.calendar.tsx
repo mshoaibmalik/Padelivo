@@ -6,6 +6,8 @@ import { useSettings } from "@/context/SettingsContext";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Button } from "@/components/app/Button";
 import { BookingDrawer } from "@/components/app/BookingDrawer";
+import { SlotMenu } from "@/components/app/SlotMenu";
+import { MaintenanceDrawer } from "@/components/app/MaintenanceDrawer";
 import { STATUS_META } from "@/lib/status";
 import { addDaysISO, fmtDate, fmtTime, todayISO, getWeekStart } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -41,6 +43,21 @@ function CalendarPage() {
     id: string | null;
     prefill?: { courtId?: string; date?: string; startTime?: string };
   }>({ open: false, id: null });
+  
+  // Slot menu state
+  const [slotMenu, setSlotMenu] = useState<{
+    open: boolean;
+    position: { x: number; y: number } | null;
+    date: string;
+    startTime: string;
+  }>({ open: false, position: null, date: "", startTime: "" });
+
+  // Maintenance drawer state
+  const [maintenance, setMaintenance] = useState<{
+    open: boolean;
+    date: string;
+    startTime: string;
+  }>({ open: false, date: "", startTime: "" });
 
   // Generate 7 days of the week (Monday to Sunday)
   const weekDays = useMemo(() => {
@@ -341,13 +358,15 @@ function CalendarPage() {
                         className="w-20 shrink-0 border-r border-line-soft last:border-r-0"
                       >
                         <button
-                          onClick={() =>
-                            setDrawer({
+                          onClick={(e) => {
+                            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                            setSlotMenu({
                               open: true,
-                              id: null,
-                              prefill: { courtId: "C-01", date: day, startTime: time },
-                            })
-                          }
+                              position: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
+                              date: day,
+                              startTime: time,
+                            });
+                          }}
                           className="w-full h-full min-h-[40px] transition-all group"
                         >
                           <div className="flex items-center justify-center h-full opacity-0 group-hover:opacity-100 transition-all">
@@ -387,6 +406,35 @@ function CalendarPage() {
         bookingId={drawer.id}
         prefill={drawer.prefill}
         onClose={() => setDrawer({ open: false, id: null })}
+      />
+
+      <SlotMenu
+        open={slotMenu.open}
+        position={slotMenu.position}
+        onReservation={() => {
+          setDrawer({
+            open: true,
+            id: null,
+            prefill: { courtId: "C-01", date: slotMenu.date, startTime: slotMenu.startTime },
+          });
+          setSlotMenu({ open: false, position: null, date: "", startTime: "" });
+        }}
+        onMaintenance={() => {
+          setMaintenance({
+            open: true,
+            date: slotMenu.date,
+            startTime: slotMenu.startTime,
+          });
+          setSlotMenu({ open: false, position: null, date: "", startTime: "" });
+        }}
+        onClose={() => setSlotMenu({ open: false, position: null, date: "", startTime: "" })}
+      />
+
+      <MaintenanceDrawer
+        open={maintenance.open}
+        date={maintenance.date}
+        startTime={maintenance.startTime}
+        onClose={() => setMaintenance({ open: false, date: "", startTime: "" })}
       />
     </>
   );

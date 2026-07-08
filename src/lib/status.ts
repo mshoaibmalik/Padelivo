@@ -1,10 +1,17 @@
 export type BookingStatus =
-  "reserved" | "payment_submitted" | "booked" | "checked_in" | "completed" | "cancelled";
+  "draft" | "reserved" | "payment_submitted" | "booked" | "checked_in" | "completed" | "cancelled";
 
 export const STATUS_META: Record<
   BookingStatus,
   { label: string; bg: string; fg: string; dot: string; order: number }
 > = {
+  draft: {
+    label: "Draft",
+    bg: "bg-slate-100 dark:bg-slate-800",
+    fg: "text-slate-600 dark:text-slate-300",
+    dot: "bg-slate-400",
+    order: 0,
+  },
   reserved: {
     label: "Reserved",
     bg: "bg-status-reserved",

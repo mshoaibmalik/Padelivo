@@ -50,6 +50,7 @@ export type Booking = {
   status: BookingStatus;
   paymentId?: string;
   createdISO: string;
+  notes?: string;
 };
 
 export type Activity = {
