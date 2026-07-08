@@ -36,7 +36,7 @@ import { PKR, PKRShort, fmtDate, fmtTime, relativeTime, todayISO } from "@/lib/f
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Baseline" },
+      { title: "Dashboard — Padelivo" },
       { name: "description", content: "Today's revenue, bookings, and pending actions." },
     ],
   }),
