@@ -72,7 +72,7 @@ export function MaintenanceDrawer({ open, date, startTime, onClose }: Props) {
         reason: reason || "Court Maintenance",
       };
 
-      dispatch({ type: "add_maintenance", maintenance: newMaintenance });
+      dispatch({ type: "create_maintenance_slot", slot: newMaintenance });
       onClose();
       setReason("");
       setDurationMins(30);
