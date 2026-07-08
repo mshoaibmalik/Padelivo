@@ -232,11 +232,14 @@ const seedBookings = (
   // key: date (YYYY-MM-DD), value: array of {startMins, endMins}
   const scheduleMap = new Map<string, { start: number; end: number }[]>();
 
-  // Generate 300 bookings across ±30 days
+  // Generate bookings: keep all completed ones, only 1 each for other statuses
   let bookingIdCounter = 20250;
   let paymentIdCounter = 90000;
+  const statusesNeeded: BookingStatus[] = ["reserved", "payment_submitted", "booked", "checked_in", "cancelled"];
+  const createdStatuses = new Set<BookingStatus>();
 
-  for (let i = 0; i < 300; i++) {
+  // First, create the single bookings for each non-completed status
+  for (const neededStatus of statusesNeeded) {
     const customer = pick(customers);
 
     // Find a non-overlapping slot
@@ -250,22 +253,20 @@ const seedBookings = (
 
     while (!foundSlot && attempts < 50) {
       attempts++;
-      dayOffset = Math.floor(R() * 60) - 30; // ±30 days
+      // Place non-completed bookings on today or future dates
+      dayOffset = neededStatus === "cancelled" ? -1 : Math.floor(R() * 15);
       const d = new Date(today);
       d.setDate(d.getDate() + dayOffset);
       dateISO = d.toISOString().slice(0, 10);
 
-      // Pick random start time indices
-      const startIdx = Math.floor(R() * (HOURS.length - 3)); // up to 3 hours before close
+      const startIdx = Math.floor(R() * (HOURS.length - 3));
       startTime = HOURS[startIdx];
 
-      // Durations: 1.0, 1.5, 2.0, 2.5, 3.0
-      durationHours = pick([1.0, 1.5, 2.0, 2.5, 3.0]);
+      durationHours = pick([1.0, 1.5, 2.0]);
       const startMins = timeToMins(startTime);
       const endMins = startMins + durationHours * 60;
       endTime = minsToTime(endMins);
 
-      // Check for overlap on this date
       const slots = scheduleMap.get(dateISO) || [];
       const overlap = slots.some((s) => startMins < s.end && endMins > s.start);
       if (!overlap) {
@@ -277,48 +278,21 @@ const seedBookings = (
 
     if (!foundSlot) continue;
 
-    // Players distribution
     const totalPlayers = pick([2, 4]);
     let residents = 0;
     let outsiders = 0;
 
     if (customer.customerType === "Resident") {
-      residents = Math.floor(R() * totalPlayers) + 1; // at least 1 resident (the booking holder)
+      residents = Math.floor(R() * totalPlayers) + 1;
       outsiders = totalPlayers - residents;
     } else {
-      outsiders = Math.floor(R() * totalPlayers) + 1; // at least 1 outsider
+      outsiders = Math.floor(R() * totalPlayers) + 1;
       residents = totalPlayers - outsiders;
     }
 
-    // Pricing calculation: resident = 500, outsider = 1000
     const residentRate = 500;
     const outsiderRate = 1000;
     const amount = (residents * residentRate + outsiders * outsiderRate) * durationHours;
-
-    let status: BookingStatus;
-    if (dayOffset < -1) {
-      status = R() < 0.95 ? "completed" : "cancelled";
-    } else if (dayOffset < 0) {
-      status = R() < 0.9 ? "completed" : R() < 0.5 ? "cancelled" : "checked_in";
-    } else if (dayOffset === 0) {
-      const r = R();
-      status =
-        r < 0.1
-          ? "reserved"
-          : r < 0.3
-            ? "payment_submitted"
-            : r < 0.7
-              ? "booked"
-              : r < 0.85
-                ? "checked_in"
-                : r < 0.95
-                  ? "completed"
-                  : "cancelled";
-    } else {
-      const r = R();
-      status =
-        r < 0.2 ? "reserved" : r < 0.4 ? "payment_submitted" : r < 0.9 ? "booked" : "cancelled";
-    }
 
     const bId = `B-${String(bookingIdCounter++)}`;
     const dObj = new Date(today);
@@ -335,20 +309,14 @@ const seedBookings = (
       totalPlayers,
       durationHours,
       amount,
-      status,
+      status: neededStatus,
       createdISO: new Date(dObj.getTime() - Math.floor(R() * 86400000 * 5)).toISOString(),
     };
 
-    if (status !== "reserved" && status !== "cancelled") {
-      const method: PaymentMethod = pick([
-        "JazzCash",
-        "EasyPaisa",
-        "Bank Transfer",
-        "Card",
-        "Cash",
-      ]);
+    if (neededStatus !== "reserved" && neededStatus !== "cancelled") {
+      const method: PaymentMethod = pick(["JazzCash", "EasyPaisa", "Bank Transfer", "Card", "Cash"]);
       const pid = `P-${String(paymentIdCounter++)}`;
-      const pstatus: Payment["status"] = status === "payment_submitted" ? "pending" : "verified";
+      const pstatus: Payment["status"] = neededStatus === "payment_submitted" ? "pending" : "verified";
       payments.push({
         id: pid,
         bookingId: bId,
@@ -363,18 +331,158 @@ const seedBookings = (
     }
 
     bookings.push(booking);
+    createdStatuses.add(neededStatus);
   }
 
-  // Ensure ~15 pending payments are set up
-  let pending = payments.filter((p) => p.status === "pending").length;
-  const candidates = bookings.filter((b) => b.status === "booked" && b.paymentId);
-  let ci = 0;
-  while (pending < 15 && ci < candidates.length) {
-    const b = candidates[ci++];
-    b.status = "payment_submitted";
-    const p = payments.find((p) => p.id === b.paymentId);
-    if (p) p.status = "pending";
-    pending++;
+  // Now generate completed bookings (spread across past dates)
+  for (let i = 0; i < 5; i++) {
+    const customer = pick(customers);
+
+    let dateISO = "";
+    let startTime = "";
+    let endTime = "";
+    let durationHours = 1;
+    let dayOffset = 0;
+    let attempts = 0;
+    let foundSlot = false;
+
+    while (!foundSlot && attempts < 50) {
+      attempts++;
+      dayOffset = -Math.floor(R() * 30) - 2; // 2-31 days ago (past)
+      const d = new Date(today);
+      d.setDate(d.getDate() + dayOffset);
+      dateISO = d.toISOString().slice(0, 10);
+
+      const startIdx = Math.floor(R() * (HOURS.length - 3));
+      startTime = HOURS[startIdx];
+
+      durationHours = pick([1.0, 1.5, 2.0, 2.5, 3.0]);
+      const startMins = timeToMins(startTime);
+      const endMins = startMins + durationHours * 60;
+      endTime = minsToTime(endMins);
+
+      const slots = scheduleMap.get(dateISO) || [];
+      const overlap = slots.some((s) => startMins < s.end && endMins > s.start);
+      if (!overlap) {
+        slots.push({ start: startMins, end: endMins });
+        scheduleMap.set(dateISO, slots);
+        foundSlot = true;
+      }
+    }
+
+    if (!foundSlot) continue;
+
+    const totalPlayers = pick([2, 4]);
+    let residents = 0;
+    let outsiders = 0;
+
+    if (customer.customerType === "Resident") {
+      residents = Math.floor(R() * totalPlayers) + 1;
+      outsiders = totalPlayers - residents;
+    } else {
+      outsiders = Math.floor(R() * totalPlayers) + 1;
+      residents = totalPlayers - outsiders;
+    }
+
+    const residentRate = 500;
+    const outsiderRate = 1000;
+    const amount = (residents * residentRate + outsiders * outsiderRate) * durationHours;
+
+    const bId = `B-${String(bookingIdCounter++)}`;
+    const dObj = new Date(today);
+    dObj.setDate(dObj.getDate() + dayOffset);
+    const booking: Booking = {
+      id: bId,
+      customerId: customer.id,
+      courtId: "C-01",
+      date: dateISO,
+      startTime,
+      endTime,
+      residents,
+      outsiders,
+      totalPlayers,
+      durationHours,
+      amount,
+      status: "completed",
+      createdISO: new Date(dObj.getTime() - Math.floor(R() * 86400000 * 5)).toISOString(),
+    };
+
+    // All completed bookings have verified payments
+    const method: PaymentMethod = pick(["JazzCash", "EasyPaisa", "Bank Transfer", "Card", "Cash"]);
+    const pid = `P-${String(paymentIdCounter++)}`;
+    payments.push({
+      id: pid,
+      bookingId: bId,
+      method,
+      amount,
+      transactionId: `TX${Math.floor(R() * 9e9 + 1e9)}`,
+      screenshotColor: pick(["#c2513a", "#274060", "#3e7d5a", "#8a6a2f", "#5b3a7c"]),
+      submittedISO: new Date(dObj.getTime() - Math.floor(R() * 86400000 * 2)).toISOString(),
+      status: "verified",
+    });
+    booking.paymentId = pid;
+
+    bookings.push(booking);
+  }
+
+  // Add 3 specific bookings for the current week (July 6-12, 2026)
+  const thisWeekDates = ["2026-07-06", "2026-07-08", "2026-07-10"];
+  const thisWeekTimes = ["09:00", "14:00", "18:00"];
+  const thisWeekDurations = [1.5, 2.0, 1.0];
+  const thisWeekStatuses: BookingStatus[] = ["booked", "checked_in", "completed"];
+  for (let i = 0; i < 3; i++) {
+    const customer = pick(customers);
+    const dateISO = thisWeekDates[i];
+    const startTime = thisWeekTimes[i];
+    const durationHours = thisWeekDurations[i];
+    const startMins = timeToMins(startTime);
+    const endMins = startMins + durationHours * 60;
+    const endTime = minsToTime(endMins);
+    const totalPlayers = pick([2, 4]);
+    let residents = 0;
+    let outsiders = 0;
+    if (customer.customerType === "Resident") {
+      residents = Math.floor(R() * totalPlayers) + 1;
+      outsiders = totalPlayers - residents;
+    } else {
+      outsiders = Math.floor(R() * totalPlayers) + 1;
+      residents = totalPlayers - outsiders;
+    }
+    const residentRate = 500;
+    const outsiderRate = 1000;
+    const amount = (residents * residentRate + outsiders * outsiderRate) * durationHours;
+    const bId = `B-${String(bookingIdCounter++)}`;
+    const booking: Booking = {
+      id: bId,
+      customerId: customer.id,
+      courtId: "C-01",
+      date: dateISO,
+      startTime,
+      endTime,
+      residents,
+      outsiders,
+      totalPlayers,
+      durationHours,
+      amount,
+      status: thisWeekStatuses[i],
+      createdISO: new Date().toISOString(),
+    };
+    if (thisWeekStatuses[i] !== "reserved") {
+      const method: PaymentMethod = pick(["JazzCash", "EasyPaisa", "Bank Transfer", "Card", "Cash"]);
+      const pid = `P-${String(paymentIdCounter++)}`;
+      payments.push({
+        id: pid,
+        bookingId: bId,
+        method,
+        amount,
+        transactionId: `TX${Math.floor(R() * 9e9 + 1e9)}`,
+        screenshotColor: pick(["#c2513a", "#274060", "#3e7d5a", "#8a6a2f", "#5b3a7c"]),
+        submittedISO: new Date().toISOString(),
+        status: "verified",
+      });
+      booking.paymentId = pid;
+    }
+    bookings.push(booking);
   }
 
   return { bookings, payments };
