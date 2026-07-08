@@ -425,12 +425,12 @@ const seedBookings = (
     bookings.push(booking);
   }
 
-  // Add 3 specific bookings for the current week (July 6-12, 2026)
-  const thisWeekDates = ["2026-07-06", "2026-07-08", "2026-07-10"];
-  const thisWeekTimes = ["09:00", "14:00", "18:00"];
-  const thisWeekDurations = [1.5, 2.0, 1.0];
-  const thisWeekStatuses: BookingStatus[] = ["booked", "checked_in", "completed"];
-  for (let i = 0; i < 3; i++) {
+  // Add 6 specific bookings across the current week (July 6-12, 2026)
+  const thisWeekDates = ["2026-07-06", "2026-07-07", "2026-07-08", "2026-07-09", "2026-07-10", "2026-07-11"];
+  const thisWeekTimes = ["09:00", "11:00", "14:00", "16:00", "18:00", "20:00"];
+  const thisWeekDurations = [1.5, 1.0, 2.0, 1.5, 1.0, 2.0];
+  const thisWeekStatuses: BookingStatus[] = ["booked", "booked", "checked_in", "booked", "completed", "reserved"];
+  for (let i = 0; i < 6; i++) {
     const customer = pick(customers);
     const dateISO = thisWeekDates[i];
     const startTime = thisWeekTimes[i];
