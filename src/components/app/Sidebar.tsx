@@ -17,10 +17,8 @@ import { Avatar } from "./Avatar";
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/courts", label: "Maintenance", icon: LayoutGrid },
-  { to: "/bookings", label: "Bookings", icon: ClipboardList },
+  { to: "/bookings", label: "Manage Bookings", icon: ClipboardList },
   { to: "/customers", label: "Customers", icon: Users },
-  { to: "/reports", label: "Reports", icon: BarChart3 },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 

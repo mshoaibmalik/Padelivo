@@ -64,14 +64,15 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
   const [startTime, setStartTime] = useState<string>("");
   const [durationHours, setDurationHours] = useState<number>(1.0);
 
-  // Players state
-  const [totalPlayers, setTotalPlayers] = useState<number>(4);
-  const [residents, setResidents] = useState<number>(4);
+  // Players state — totalPlayers is derived from residents + outsiders, must be 2 or 4
+  const [residents, setResidents] = useState<number>(2);
   const [outsiders, setOutsiders] = useState<number>(0);
+  const totalPlayers = residents + outsiders;
 
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("Cash");
   const [transactionId, setTransactionId] = useState("");
+  const [screenshot, setScreenshot] = useState<string | null>(null);
 
   // Notes state
   const [notes, setNotes] = useState<string>("");
@@ -87,7 +88,6 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       setDate(existing.date);
       setStartTime(existing.startTime);
       setDurationHours(existing.durationHours);
-      setTotalPlayers(existing.totalPlayers);
       setResidents(existing.residents);
       setOutsiders(existing.outsiders);
       setNotes(existing.notes || "");
@@ -96,6 +96,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       if (payment) {
         setPaymentMethod(payment.method);
         setTransactionId(payment.transactionId);
+        setScreenshot(payment.screenshotColor || null);
       }
     } else {
       setSelectedCustomerId("");
@@ -103,11 +104,11 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       setDate(prefill?.date ?? new Date().toISOString().slice(0, 10));
       setStartTime(prefill?.startTime ?? "18:00");
       setDurationHours(1.0);
-      setTotalPlayers(4);
-      setResidents(4);
+      setResidents(2);
       setOutsiders(0);
       setPaymentMethod("Cash");
       setTransactionId("");
+      setScreenshot(null);
       setNotes("");
       setDraftId(null);
     }
@@ -128,10 +129,10 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     );
   }, [state.customers, searchQuery]);
 
-  // Validate players constraint
+  // Validate players constraint — must be 2 or 4 total
   const isPlayersCountValid = useMemo(() => {
-    return residents + outsiders === totalPlayers;
-  }, [residents, outsiders, totalPlayers]);
+    return totalPlayers === 2 || totalPlayers === 4;
+  }, [totalPlayers]);
 
   // Auto-calculate end time
   const endTime = useMemo(() => {
@@ -157,23 +158,79 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     };
   }, [residents, outsiders, durationHours, settings.residentRate, settings.outsiderRate]);
 
-  // Check for overlaps
-  const isOverlapping = useMemo(() => {
-    return state.bookings.some((b) => {
-      if (b.status === "cancelled") return false;
-      if (existing && b.id === existing.id) return false;
-      if (draftId && b.id === draftId) return false;
-      if (b.date !== date) return false;
+  // Compute available time ranges for the selected date
+  const availableTimeRanges = useMemo<{
+    busyRanges: { start: number; end: number }[];
+    isFree: boolean;
+    freeSlots: string[];
+    allSlots: string[];
+  }>(() => {
+    if (!date) return { busyRanges: [], isFree: true, freeSlots: [], allSlots: [] };
 
-      const startA = timeToMins(startTime);
-      const endA = startA + durationHours * 60;
-      const startB = timeToMins(b.startTime);
-      const endB = timeToMins(b.endTime);
-      return startA < endB && endA > startB;
+    // Collect all busy ranges (bookings + maintenance) for the date
+    const busyRanges: { start: number; end: number }[] = [];
+
+    // Add bookings
+    for (const b of state.bookings) {
+      if (b.status === "cancelled") continue;
+      if (existing && b.id === existing.id) continue;
+      if (draftId && b.id === draftId) continue;
+      if (b.date !== date) continue;
+      busyRanges.push({ start: timeToMins(b.startTime), end: timeToMins(b.endTime) });
+    }
+
+    // Add maintenance
+    for (const m of state.maintenanceSlots) {
+      if (m.date !== date) continue;
+      busyRanges.push({ start: timeToMins(m.startTime), end: timeToMins(m.endTime) });
+    }
+
+    // Sort by start time
+    busyRanges.sort((a, b) => a.start - b.start);
+
+    // Merge overlapping ranges
+    const merged: { start: number; end: number }[] = [];
+    for (const r of busyRanges) {
+      if (merged.length === 0 || r.start > merged[merged.length - 1].end) {
+        merged.push({ ...r });
+      } else {
+        merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, r.end);
+      }
+    }
+
+    // Get all time slots from HOURS_OF_DAY (exclude last 00:00 which is next day)
+    const allSlots = HOURS_OF_DAY.slice(0, -1);
+
+    // Determine which slots are available
+    const startMins = timeToMins(startTime);
+    const endMins = startMins + durationHours * 60;
+
+    // Check if current selection is free
+    const isFree = !merged.some((r) => startMins < r.end && endMins > r.start);
+
+    // Get available start times for at least 1-hour bookings (in 30-min increments)
+    const freeSlots = allSlots.filter((slot) => {
+      const slotStart = timeToMins(slot);
+      const minEnd = slotStart + 60; // minimum 1 hour
+      // Check if the full 1-hour block is free
+      for (let m = slotStart; m < minEnd; m += 30) {
+        const blockEnd = m + 30;
+        if (merged.some((r) => m < r.end && blockEnd > r.start)) {
+          return false;
+        }
+      }
+      return true;
     });
-  }, [state.bookings, existing, draftId, date, startTime, durationHours]);
 
-  // Check for maintenance
+    return { busyRanges: merged, isFree, freeSlots, allSlots };
+  }, [state.bookings, state.maintenanceSlots, existing, draftId, date, startTime, durationHours]);
+
+  // Check for overlaps (quick boolean for disabling save button)
+  const isOverlapping = useMemo(() => {
+    return !availableTimeRanges.isFree;
+  }, [availableTimeRanges.isFree]);
+
+  // Check for maintenance (used in save validation and summary)
   const isInMaintenance = useMemo(() => {
     return state.maintenanceSlots.some((m) => {
       if (m.date !== date) return false;
@@ -275,7 +332,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       return;
     }
     if (!isPlayersCountValid) {
-      alert("Resident players + Outsider players must equal Total Players.");
+      alert("Total players must be 2 or 4. Please adjust residents and outsiders.");
       return;
     }
 
@@ -334,7 +391,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
           method: paymentMethod,
           amount: pricingBreakdown.grandTotal,
           transactionId: transactionId || `TXN-${Date.now()}`,
-          screenshotColor: "#274060",
+          screenshotColor: screenshot || "#274060",
           submittedISO: new Date().toISOString(),
           status: "pending",
         };
@@ -670,16 +727,42 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                       </div>
 
                       {isOverlapping && (
-                        <div className="flex items-center gap-2 rounded-md border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive">
-                          <AlertCircle className="h-4 w-4 shrink-0" />
-                          <span>Time slot overlaps with another booking</span>
-                        </div>
-                      )}
-
-                      {isInMaintenance && (
-                        <div className="flex items-center gap-2 rounded-md border border-status-cancelled-fg/20 bg-status-cancelled/10 p-3 text-xs text-status-cancelled-fg">
-                          <Wrench className="h-4 w-4 shrink-0" />
-                          <span>Court is under maintenance during this time</span>
+                        <div className="space-y-2 rounded-md border border-destructive/20 bg-destructive/5 p-3 text-xs">
+                          <div className="flex items-center gap-2 text-destructive font-medium">
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                            <span>This time slot is not available</span>
+                          </div>
+                          <div className="pl-6 text-ink-mute">
+                            <div className="mb-1">Available time slots for {fmtDate(date)}:</div>
+                            <div className="flex flex-wrap gap-1">
+                              {availableTimeRanges.freeSlots.length > 0 ? (
+                                availableTimeRanges.freeSlots.map((slot) => {
+                                  const slotMins = timeToMins(slot);
+                                  const isSelected = slotMins >= timeToMins(startTime) && slotMins < timeToMins(startTime) + durationHours * 60;
+                                  const slotEnd = slotMins + 30;
+                                  const slotIsFree = !availableTimeRanges.busyRanges.some(
+                                    (r) => slotMins < r.end && slotEnd > r.start
+                                  );
+                                  return (
+                                    <button
+                                      key={slot}
+                                      onClick={() => setStartTime(slot)}
+                                      className={cn(
+                                        "rounded px-2 py-0.5 font-mono text-[10px] transition-colors",
+                                        slotIsFree
+                                          ? "bg-status-available/20 text-status-available-fg hover:bg-status-available/30"
+                                          : "bg-destructive/10 text-destructive line-through"
+                                      )}
+                                    >
+                                      {slot}
+                                    </button>
+                                  );
+                                })
+                              ) : (
+                                <span className="text-ink-mute">No available slots for this date</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -688,20 +771,6 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                   {/* Players Section */}
                   <FormSection title="Players" icon={<Users className="h-4 w-4" />}>
                     <div className="space-y-4">
-                      <div>
-                        <label className="text-[10px] uppercase font-semibold text-ink-mute block mb-1">
-                          Total Players
-                        </label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={12}
-                          value={totalPlayers}
-                          onChange={(e) => setTotalPlayers(parseInt(e.target.value) || 0)}
-                          className="h-10 w-full rounded-md border border-line bg-card px-3 text-sm text-ink focus:border-clay focus:outline-none"
-                        />
-                      </div>
-
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] uppercase font-semibold text-ink-mute block mb-1">
@@ -710,7 +779,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                           <input
                             type="number"
                             min={0}
-                            max={totalPlayers}
+                            max={4}
                             value={residents}
                             onChange={(e) => setResidents(parseInt(e.target.value) || 0)}
                             className="h-10 w-full rounded-md border border-line bg-card px-3 text-sm text-ink focus:border-clay focus:outline-none"
@@ -724,7 +793,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                           <input
                             type="number"
                             min={0}
-                            max={totalPlayers}
+                            max={4}
                             value={outsiders}
                             onChange={(e) => setOutsiders(parseInt(e.target.value) || 0)}
                             className="h-10 w-full rounded-md border border-line bg-card px-3 text-sm text-ink focus:border-clay focus:outline-none"
@@ -732,16 +801,21 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                         </div>
                       </div>
 
+                      <div className="bg-canvas p-3 rounded-lg flex items-center justify-between text-xs border border-line-soft">
+                        <span className="text-ink-mute">Total Players:</span>
+                        <span className="font-semibold text-ink font-mono">{totalPlayers}</span>
+                      </div>
+
                       {!isPlayersCountValid && (
                         <div className="rounded-md border border-status-cancelled-fg/20 bg-status-cancelled/10 p-3 text-xs text-status-cancelled-fg font-medium">
-                          Residents ({residents}) + Outsiders ({outsiders}) must equal {totalPlayers}
+                          Total players must be 2 or 4. Currently {totalPlayers}.
                         </div>
                       )}
 
                       {isPlayersCountValid && (
                         <div className="rounded-md bg-status-available/20 text-status-available-fg p-3 text-xs flex items-center gap-1.5">
                           <Check className="h-4 w-4 shrink-0" />
-                          <span>Player count validated</span>
+                          <span>Player count validated ({totalPlayers} players)</span>
                         </div>
                       )}
                     </div>
@@ -770,18 +844,63 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                       {(paymentMethod === "JazzCash" ||
                         paymentMethod === "EasyPaisa" ||
                         paymentMethod === "Bank Transfer") && (
-                        <div>
-                          <label className="text-[10px] uppercase font-semibold text-ink-mute block mb-1">
-                            Transaction ID
-                          </label>
-                          <input
-                            type="text"
-                            value={transactionId}
-                            onChange={(e) => setTransactionId(e.target.value)}
-                            placeholder="e.g. TXN-10826372"
-                            className="h-10 w-full rounded-md border border-line bg-card px-3 text-sm text-ink focus:border-clay focus:outline-none"
-                          />
-                        </div>
+                        <>
+                          <div>
+                            <label className="text-[10px] uppercase font-semibold text-ink-mute block mb-1">
+                              Transaction ID
+                            </label>
+                            <input
+                              type="text"
+                              value={transactionId}
+                              onChange={(e) => setTransactionId(e.target.value)}
+                              placeholder="e.g. TXN-10826372"
+                              className="h-10 w-full rounded-md border border-line bg-card px-3 text-sm text-ink focus:border-clay focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] uppercase font-semibold text-ink-mute block mb-1">
+                              Payment Screenshot
+                            </label>
+                            <div className="flex items-center gap-3">
+                              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-card px-4 py-2.5 text-sm text-ink hover:bg-secondary transition-colors">
+                                <Upload className="h-4 w-4 text-ink-mute" />
+                                <span>{screenshot ? "Change" : "Upload"}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const reader = new FileReader();
+                                      reader.onload = (ev) => {
+                                        setScreenshot(ev.target?.result as string);
+                                      };
+                                      reader.readAsDataURL(file);
+                                    }
+                                  }}
+                                />
+                              </label>
+                              {screenshot && (
+                                <div className="flex items-center gap-2">
+                                  <div className="h-8 w-8 rounded border border-line overflow-hidden">
+                                    <img
+                                      src={screenshot}
+                                      alt="Screenshot preview"
+                                      className="h-full w-full object-cover"
+                                    />
+                                  </div>
+                                  <button
+                                    onClick={() => setScreenshot(null)}
+                                    className="text-xs text-destructive hover:underline"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
                   </FormSection>
@@ -871,7 +990,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                         <Row k="Outsiders" v={outsiders} />
                         {!isPlayersCountValid && (
                           <div className="text-destructive text-[11px] mt-2">
-                            ⚠ Count mismatch
+                            ⚠ Must be 2 or 4 players
                           </div>
                         )}
                       </div>

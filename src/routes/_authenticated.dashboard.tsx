@@ -129,11 +129,7 @@ function DashboardPage() {
         eyebrow={fmtDate(today)}
         title="Main Court Dashboard"
         description="Live snapshot of the single-court availability, revenue stats, and customer traffic."
-        actions={
-          <Button variant="clay" onClick={() => setDrawer({ open: true, id: null })}>
-            <Plus className="h-4 w-4" /> New Reservation
-          </Button>
-        }
+        actions={undefined}
       />
 
       {/* Row 1 Stats */}

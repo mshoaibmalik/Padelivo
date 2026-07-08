@@ -16,11 +16,11 @@ export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
 });
 
-const TABS = ["Club Identity", "Pricing Rules", "Appearance"] as const;
+const TABS = ["Pricing Rules", "Appearance"] as const;
 
 function SettingsPage() {
   const { settings, update } = useSettings();
-  const [tab, setTab] = useState<(typeof TABS)[number]>("Club Identity");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("Pricing Rules");
   const [businessAddress, setBusinessAddress] = useState("Phase 5, DHA, Lahore, Pakistan");
   const [businessPhone, setBusinessPhone] = useState("+92 42 111 222 333");
 
@@ -50,50 +50,7 @@ function SettingsPage() {
       </div>
 
       <div className="mt-6 max-w-3xl">
-        {/* TAB 1: Club Identity & Business info */}
-        {tab === "Club Identity" && (
-          <Card>
-            <CardHeader
-              title="Club Identity"
-              subtitle="Identity settings displayed in portal and headers"
-            />
-            <div className="space-y-4 p-5">
-              <Field label="Club Name">
-                <input
-                  value={settings.clubName}
-                  onChange={(e) => update({ clubName: e.target.value })}
-                  className="h-9 w-full rounded-md border border-line bg-card px-3 text-sm text-ink focus:border-clay focus:outline-none"
-                />
-              </Field>
-
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Business Contact Phone">
-                  <input
-                    value={businessPhone}
-                    onChange={(e) => setBusinessPhone(e.target.value)}
-                    className="h-9 w-full rounded-md border border-line bg-card px-3 text-sm text-ink focus:border-clay focus:outline-none"
-                  />
-                </Field>
-
-                <Field label="Currency">
-                  <div className="h-9 flex items-center text-sm font-semibold text-ink pl-1">
-                    Pakistani Rupee (PKR)
-                  </div>
-                </Field>
-              </div>
-
-              <Field label="Facility Address">
-                <textarea
-                  value={businessAddress}
-                  onChange={(e) => setBusinessAddress(e.target.value)}
-                  className="h-16 w-full rounded-md border border-line bg-card px-3 py-1.5 text-sm text-ink focus:border-clay focus:outline-none resize-none"
-                />
-              </Field>
-            </div>
-          </Card>
-        )}
-
-        {/* TAB 2: Pricing Rules */}
+        {/* TAB 1: Pricing Rules */}
         {tab === "Pricing Rules" && (
           <Card>
             <CardHeader
@@ -124,7 +81,7 @@ function SettingsPage() {
           </Card>
         )}
 
-        {/* TAB 3: Appearance */}
+        {/* TAB 2: Appearance */}
         {tab === "Appearance" && (
           <Card>
             <CardHeader title="System Theme" subtitle="Configure manager visual settings" />

@@ -34,10 +34,13 @@ const minsToTime = (m: number) => {
   return `${String(h).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 };
 
+type ViewMode = "weekly" | "monthly";
+
 function CalendarPage() {
   const { state, dispatch } = useClub();
   const { settings } = useSettings();
   const [weekStart, setWeekStart] = useState(() => getWeekStart(todayISO()));
+  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
   const [drawer, setDrawer] = useState<{
     open: boolean;
     id: string | null;
@@ -59,10 +62,22 @@ function CalendarPage() {
     startTime: string;
   }>({ open: false, date: "", startTime: "" });
 
-  // Generate 7 days of the week (Monday to Sunday)
+  // Get the 1st of the month for a given date
+  const getMonthStart = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  };
+
+  // Generate days based on view mode
   const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i));
-  }, [weekStart]);
+    if (viewMode === "weekly") {
+      return Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i));
+    } else {
+      // Monthly view: 30 days starting from the 1st of the month
+      const monthStart = getMonthStart(weekStart);
+      return Array.from({ length: 30 }, (_, i) => addDaysISO(monthStart, i));
+    }
+  }, [weekStart, viewMode]);
 
   // Generate 30-minute time slots based on settings
   const timeSlots = useMemo(() => {
@@ -117,49 +132,112 @@ function CalendarPage() {
     return d >= start && d <= end;
   };
 
+  const handleNavigate = (direction: "prev" | "next") => {
+    if (viewMode === "weekly") {
+      setWeekStart(addDaysISO(weekStart, direction === "prev" ? -7 : 7));
+    } else {
+      // Monthly: navigate by month
+      const d = new Date(weekStart);
+      d.setMonth(d.getMonth() + (direction === "prev" ? -1 : 1));
+      setWeekStart(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`);
+    }
+  };
+
+  const handleThisPeriod = () => {
+    if (viewMode === "weekly") {
+      setWeekStart(getWeekStart(todayISO()));
+    } else {
+      setWeekStart(getMonthStart(todayISO()));
+    }
+  };
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    // Reset to current period when switching views
+    if (mode === "weekly") {
+      setWeekStart(getWeekStart(todayISO()));
+    } else {
+      setWeekStart(getMonthStart(todayISO()));
+    }
+  };
+
+  const dateRangeLabel = useMemo(() => {
+    if (viewMode === "weekly") {
+      return `${fmtDate(weekStart)} — ${fmtDate(addDaysISO(weekStart, 6))}`;
+    } else {
+      const firstDay = weekDays[0];
+      const lastDay = weekDays[weekDays.length - 1];
+      const monthName = new Date(firstDay).toLocaleDateString("en-PK", { month: "long", year: "numeric" });
+      return `${monthName} — ${fmtDate(firstDay)} to ${fmtDate(lastDay)}`;
+    }
+  }, [viewMode, weekStart, weekDays]);
+
   return (
     <>
       <PageHeader
         eyebrow="Court Scheduler"
-        title="Weekly Court Schedule"
+        title={viewMode === "weekly" ? "Weekly Court Schedule" : "Monthly Court Schedule"}
         description="View the weekly matrix for the Main Court. Time slots are columns, dates are rows. Click any cell to reserve or view booking details."
         actions={
           <div className="flex flex-col gap-2">
-            {/* Week navigation */}
+            {/* View mode toggle + Navigation */}
             <div className="flex items-center gap-1.5">
+              {/* View mode toggle */}
+              <div className="flex items-center rounded-lg border border-line bg-card p-0.5 mr-1">
+                <button
+                  onClick={() => handleViewModeChange("weekly")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    viewMode === "weekly"
+                      ? "bg-clay text-white"
+                      : "text-ink hover:bg-secondary"
+                  )}
+                >
+                  Weekly
+                </button>
+                <button
+                  onClick={() => handleViewModeChange("monthly")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                    viewMode === "monthly"
+                      ? "bg-clay text-white"
+                      : "text-ink hover:bg-secondary"
+                  )}
+                >
+                  Monthly
+                </button>
+              </div>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
+                onClick={() => handleNavigate("prev")}
                 className="h-8 w-8 p-0"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <button
-                onClick={() => setWeekStart(getWeekStart(todayISO()))}
+                onClick={handleThisPeriod}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                  weekStart === getWeekStart(todayISO())
-                    ? "bg-clay text-white"
-                    : "border border-line bg-card text-ink hover:bg-secondary",
+                  "border border-line bg-card text-ink hover:bg-secondary"
                 )}
               >
-                This Week
+                {viewMode === "weekly" ? "This Week" : "This Month"}
               </button>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
+                onClick={() => handleNavigate("next")}
                 className="h-8 w-8 p-0"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
 
-            {/* Week date range display */}
+            {/* Date range display */}
             <div className="flex items-center justify-between rounded-lg border border-line-soft bg-card px-3 py-2">
               <div className="text-sm font-medium text-ink">
-                {fmtDate(weekStart)} — {fmtDate(addDaysISO(weekStart, 6))}
+                {dateRangeLabel}
               </div>
             </div>
           </div>
@@ -228,6 +306,7 @@ function CalendarPage() {
               const dayNum = dayDate.getDate();
               const isToday = day === today;
               const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
+              const isInCurrentWeek = isCurrentWeek(day);
               const dayBookings = state.bookings.filter(
                 (b) => b.date === day && b.status !== "cancelled"
               );
