@@ -72,7 +72,7 @@ export function MaintenanceDrawer({ open, date, startTime, onClose }: Props) {
         reason: reason || "Court Maintenance",
       };
 
-      dispatch({ type: "create_maintenance_slot", slot: newMaintenance });
+      dispatch({ type: "add_maintenance", maintenance: newMaintenance });
       onClose();
       setReason("");
       setDurationMins(30);
@@ -114,7 +114,7 @@ export function MaintenanceDrawer({ open, date, startTime, onClose }: Props) {
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="p-4 space-y-4">
           {/* Maintenance Window */}
           <div className="rounded-lg bg-secondary/50 border border-line-soft p-4">
             <h3 className="text-xs font-semibold text-ink-mute uppercase mb-3">Maintenance Window</h3>
