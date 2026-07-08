@@ -1,20 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Wrench, Calendar, CheckCircle, Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Wrench, Calendar, Plus } from "lucide-react";
 import { useClub } from "@/context/ClubContext";
 import { useSettings } from "@/context/SettingsContext";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Button } from "@/components/app/Button";
 import { BookingDrawer } from "@/components/app/BookingDrawer";
 import { STATUS_META } from "@/lib/status";
-import { addDaysISO, fmtDate, fmtTime, todayISO } from "@/lib/format";
+import { addDaysISO, fmtDate, fmtTime, todayISO, getWeekStart } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/calendar")({
   head: () => ({
     meta: [
       { title: "Calendar — Baseline" },
-      { name: "description", content: "Court schedule at a glance." },
+      { name: "description", content: "Weekly court schedule at a glance." },
     ],
   }),
   component: CalendarPage,
@@ -35,24 +35,19 @@ const minsToTime = (m: number) => {
 function CalendarPage() {
   const { state, dispatch } = useClub();
   const { settings } = useSettings();
-  const [date, setDate] = useState(todayISO());
+  const [weekStart, setWeekStart] = useState(() => getWeekStart(todayISO()));
   const [drawer, setDrawer] = useState<{
     open: boolean;
     id: string | null;
     prefill?: { courtId?: string; date?: string; startTime?: string };
   }>({ open: false, id: null });
 
-  const dayBookings = useMemo(
-    () => state.bookings.filter((b) => b.date === date && b.status !== "cancelled"),
-    [state.bookings, date],
-  );
+  // Generate 7 days of the week (Monday to Sunday)
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => addDaysISO(weekStart, i));
+  }, [weekStart]);
 
-  const dayMaintenance = useMemo(
-    () => state.maintenanceSlots.filter((m) => m.date === date),
-    [state.maintenanceSlots, date],
-  );
-
-  // Generate 30-minute slots based on settings opening/closing times
+  // Generate 30-minute time slots based on settings
   const timeSlots = useMemo(() => {
     const startMins = timeToMins(settings.openingTime || "07:00");
     const endMins = timeToMins(settings.closingTime || "23:00");
@@ -63,261 +58,326 @@ function CalendarPage() {
     return list;
   }, [settings.openingTime, settings.closingTime]);
 
-  const lookupBooking = (time: string) => {
-    return dayBookings.find((b) => {
-      return time >= b.startTime && time < b.endTime;
+  // Get bookings for a specific date and time slot
+  const getBookingAt = (date: string, time: string) => {
+    return state.bookings.find((b) => {
+      if (b.date !== date || b.status === "cancelled") return false;
+      const timeMins = timeToMins(time);
+      const startMins = timeToMins(b.startTime);
+      const endMins = timeToMins(b.endTime);
+      return timeMins >= startMins && timeMins < endMins;
     });
   };
 
-  const lookupMaintenance = (time: string) => {
-    return dayMaintenance.find((m) => {
-      return time >= m.startTime && time < m.endTime;
+  // Get maintenance at a specific date and time slot
+  const getMaintenanceAt = (date: string, time: string) => {
+    return state.maintenanceSlots.find((m) => {
+      if (m.date !== date) return false;
+      const timeMins = timeToMins(time);
+      const startMins = timeToMins(m.startTime);
+      const endMins = timeToMins(m.endTime);
+      return timeMins >= startMins && timeMins < endMins;
     });
   };
 
-  const nowMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-  const isToday = date === todayISO();
+  // Check if a time slot is the start of a booking
+  const isBookingStart = (booking: any, time: string) => {
+    return booking.startTime === time;
+  };
+
+  // Calculate how many 30-min slots a booking spans
+  const getBookingSpan = (booking: any) => {
+    const startMins = timeToMins(booking.startTime);
+    const endMins = timeToMins(booking.endTime);
+    return Math.ceil((endMins - startMins) / 30);
+  };
+
+  const today = todayISO();
+  const isCurrentWeek = (date: string) => {
+    const d = new Date(date);
+    const start = new Date(weekStart);
+    const end = new Date(addDaysISO(weekStart, 6));
+    return d >= start && d <= end;
+  };
 
   return (
     <>
       <PageHeader
         eyebrow="Court Scheduler"
-        title="Main Court Availability"
-        description="View the vertical timeline for the Main Court. Click any time block to reserve or view booking details."
+        title="Weekly Court Schedule"
+        description="View the weekly matrix for the Main Court. Time slots are columns, dates are rows. Click any cell to reserve or view booking details."
         actions={
           <div className="flex flex-col gap-2">
-            {/* Quick filters */}
+            {/* Week navigation */}
             <div className="flex items-center gap-1.5">
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setDate(addDaysISO(date, -1))}
+                onClick={() => setWeekStart(addDaysISO(weekStart, -7))}
                 className="h-8 w-8 p-0"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <button
-                onClick={() => setDate(todayISO())}
+                onClick={() => setWeekStart(getWeekStart(todayISO()))}
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                  date === todayISO()
+                  weekStart === getWeekStart(todayISO())
                     ? "bg-clay text-white"
                     : "border border-line bg-card text-ink hover:bg-secondary",
                 )}
               >
-                Today
+                This Week
               </button>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setDate(addDaysISO(date, 1))}
+                onClick={() => setWeekStart(addDaysISO(weekStart, 7))}
                 className="h-8 w-8 p-0"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
 
-            {/* Date display with booking count */}
+            {/* Week date range display */}
             <div className="flex items-center justify-between rounded-lg border border-line-soft bg-card px-3 py-2">
-              <div className="flex items-center gap-3">
-                <div className="text-center">
-                  <div className="text-[10px] uppercase tracking-wider text-ink-mute">
-                    {new Date(date).toLocaleDateString("en-PK", { weekday: "short" })}
-                  </div>
-                  <div className="text-lg font-semibold text-ink tabular">
-                    {new Date(date).getDate()}
-                  </div>
-                </div>
-                <div className="h-8 w-px bg-line-soft" />
-                <div>
-                  <div className="text-sm font-medium text-ink">
-                    {new Date(date).toLocaleDateString("en-PK", { month: "long", year: "numeric" })}
-                  </div>
-                  <div className="text-[11px] text-ink-mute">
-                    {dayBookings.length} booking{dayBookings.length !== 1 ? "s" : ""}
-                    {dayMaintenance.length > 0 && (
-                      <span className="ml-1.5 text-status-cancelled-fg font-medium">
-                        · {dayMaintenance.length} Maintenance
-                      </span>
-                    )}
-                  </div>
-                </div>
+              <div className="text-sm font-medium text-ink">
+                {fmtDate(weekStart)} — {fmtDate(addDaysISO(weekStart, 6))}
               </div>
             </div>
           </div>
         }
       />
 
-      <div className="mt-6 max-w-4xl overflow-hidden rounded-xl border border-line-soft bg-card shadow-sm">
-        <div className="border-b border-line-soft bg-canvas px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="font-display text-lg text-ink font-semibold">Main Court Timeline</span>
-            <span className="rounded bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-              Indoor
-            </span>
-          </div>
-          <div className="flex items-center gap-4 text-xs text-ink-mute">
-            <div className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
-              <span>Residents: Rs {settings.residentRate}/hr</span>
+      {/* Weekly Matrix Calendar - Giant Chart Style */}
+      <div className="mt-6 overflow-hidden rounded-2xl border-2 border-line-soft bg-card shadow-xl">
+        {/* Enhanced Header */}
+        <div className="border-b-2 border-line-soft bg-gradient-to-r from-canvas to-secondary px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-clay/10 p-2">
+                <Calendar className="h-6 w-6 text-clay" />
+              </div>
+              <div>
+                <span className="font-display text-2xl text-ink font-bold">Main Court Schedule</span>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="rounded-full bg-blue-500/15 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                    Indoor
+                  </span>
+                  <span className="text-xs text-ink-mute">
+                    {timeSlots.length} time slots available
+                  </span>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
-              <span>Outsiders: Rs {settings.outsiderRate}/hr</span>
+            <div className="flex items-center gap-6 text-xs">
+              <div className="flex items-center gap-2 rounded-lg bg-status-available/10 px-3 py-2">
+                <div className="h-2.5 w-2.5 rounded-full bg-status-available-fg" />
+                <span className="font-medium text-ink">Residents: Rs {settings.residentRate}/hr</span>
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-status-booked/10 px-3 py-2">
+                <div className="h-2.5 w-2.5 rounded-full bg-status-booked-fg" />
+                <span className="font-medium text-ink">Outsiders: Rs {settings.outsiderRate}/hr</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="divide-y divide-line-soft">
-          {timeSlots.map((time) => {
-            const b = lookupBooking(time);
-            const maintenance = lookupMaintenance(time);
-            const [hh, mm] = time.split(":").map(Number);
-            const rowMins = hh * 60 + mm;
-            const showNowLine = isToday && rowMins <= nowMinutes && nowMinutes < rowMins + 30;
-            const isHourStart = mm === 0;
-
-            if (maintenance) {
-              return (
-                <div key={time} className="flex min-h-[64px] relative">
-                  {showNowLine && (
-                    <span className="absolute left-0 right-0 top-0 h-0.5 bg-clay z-10 shadow-sm shadow-clay/50 animate-pulse" />
-                  )}
-                  <div className="w-20 shrink-0 border-r border-line-soft p-3 text-right text-xs tabular text-ink-mute font-medium bg-canvas/30">
-                    {isHourStart ? fmtTime(time) : <span className="opacity-40">{time}</span>}
-                  </div>
-                  <div className="flex-1 bg-status-cancelled/10 px-4 py-3 flex items-start justify-between">
-                    <div className="flex items-center gap-2 text-status-cancelled-fg">
-                      <Wrench className="h-4 w-4 shrink-0" />
-                      <div>
-                        <span className="font-semibold text-xs uppercase tracking-wider">
-                          Court Maintenance
-                        </span>
-                        {maintenance.reason && (
-                          <p className="text-[11px] text-ink-mute mt-0.5">{maintenance.reason}</p>
-                        )}
-                      </div>
+        {/* Calendar Grid - Compact with Sticky Headers */}
+        <div className="overflow-x-auto bg-gradient-to-b from-card to-canvas/30">
+          <div className="inline-block min-w-full">
+            {/* Time slot headers row - Sticky Top with solid background */}
+            <div className="flex sticky top-0 z-20 border-b-2 border-line-soft bg-card">
+              <div className="w-20 shrink-0 border-r-2 border-line-soft p-2 sticky left-0 z-30 bg-card" />
+              {timeSlots.map((time, idx) => {
+                const isHourStart = time.endsWith(":00");
+                return (
+                  <div
+                    key={time}
+                    className="w-20 shrink-0 border-r border-line-soft p-1.5 text-center last:border-r-0 bg-card"
+                  >
+                    <div className="text-[10px] uppercase tracking-wider text-ink font-bold">
+                      {isHourStart ? fmtTime(time) : <span className="font-mono opacity-60">{time}</span>}
                     </div>
-                    <span className="text-[10px] bg-status-cancelled/20 text-status-cancelled-fg px-2 py-0.5 rounded font-mono font-medium">
-                      {maintenance.startTime} - {maintenance.endTime}
-                    </span>
                   </div>
-                </div>
+                );
+              })}
+            </div>
+
+            {/* Date rows */}
+            {weekDays.map((day, dayIdx) => {
+              const dayDate = new Date(day);
+              const dayName = dayDate.toLocaleDateString('en-PK', { weekday: 'short' });
+              const dayNum = dayDate.getDate();
+              const isToday = day === today;
+              const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
+              const dayBookings = state.bookings.filter(
+                (b) => b.date === day && b.status !== "cancelled"
               );
-            }
-
-            if (b) {
-              const meta = STATUS_META[b.status];
-              const cust = state.customers.find((c) => c.id === b.customerId);
-
-              // Only render details if this slot matches the start of the booking,
-              // otherwise render a continuation block to make the Google Calendar aesthetic.
-              const isStartSlot = b.startTime === time;
+              const dayMaintenance = state.maintenanceSlots.filter((m) => m.date === day);
 
               return (
-                <div key={time} className="flex min-h-[64px] relative">
-                  {showNowLine && (
-                    <span className="absolute left-0 right-0 top-0 h-0.5 bg-clay z-10 shadow-sm shadow-clay/50 animate-pulse" />
+                <div
+                  key={day}
+                  className={cn(
+                    "flex border-b border-line-soft last:border-b-0",
+                    isToday && "bg-clay-soft/20",
+                    isWeekend && !isToday && "bg-secondary/20"
                   )}
-                  <div className="w-20 shrink-0 border-r border-line-soft p-3 text-right text-xs tabular text-ink-mute font-medium bg-canvas/30">
-                    {isHourStart ? fmtTime(time) : <span className="opacity-40">{time}</span>}
-                  </div>
-                  <button
-                    onClick={() => setDrawer({ open: true, id: b.id })}
+                >
+                  {/* Date label - Compact - Sticky Left with solid background */}
+                  <div
                     className={cn(
-                      "flex-1 px-4 py-3 text-left transition-colors border-l-4 flex items-center justify-between group",
-                      meta?.bg,
-                      meta?.fg,
-                      b.status === "completed" && "border-l-status-completed-fg",
-                      b.status === "checked_in" && "border-l-status-checkedin-fg",
-                      b.status === "booked" && "border-l-status-booked-fg",
-                      b.status === "payment_submitted" && "border-l-status-payment-fg",
-                      b.status === "reserved" && "border-l-status-reserved-fg",
+                      "w-20 shrink-0 border-r-2 border-line-soft p-2 sticky left-0 z-10 bg-card",
+                      isToday && "bg-clay-soft/30"
                     )}
                   >
-                    {isStartSlot ? (
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className={cn("h-2 w-2 rounded-full", meta?.dot)} />
-                          <span className="font-semibold text-sm text-ink">
-                            {cust?.name || "Customer"}
-                          </span>
-                          <span className="text-xs opacity-75">({cust?.customerType})</span>
-                        </div>
-                        <div className="mt-1 flex items-center gap-3 text-[11px] opacity-80">
-                          <span className="font-mono">{b.id}</span>
-                          <span>·</span>
-                          <span>
-                            {b.totalPlayers} Players ({b.residents} Res / {b.outsiders} Out)
-                          </span>
-                          <span>·</span>
-                          <span className="font-mono font-medium">
-                            Rs {b.amount.toLocaleString("en-PK")}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-[10px] opacity-50 italic">
-                        Continuation of booking {b.id} ({cust?.name})
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] uppercase font-semibold tracking-wider px-2 py-0.5 rounded bg-white/40 dark:bg-black/20 text-ink">
-                        {meta?.label}
-                      </span>
-                      <span className="text-[10px] opacity-75 font-mono">
-                        {b.startTime} - {b.endTime}
-                      </span>
+                    <div className="text-[10px] uppercase tracking-wider text-ink-mute font-bold">
+                      {dayName}
                     </div>
-                  </button>
+                    <div
+                      className={cn(
+                        "text-xl font-bold tabular mt-0.5",
+                        isToday ? "text-clay" : "text-ink"
+                      )}
+                    >
+                      {dayNum}
+                    </div>
+                    <div className="flex flex-col gap-0.5 mt-1">
+                      {dayBookings.length > 0 && (
+                        <div className="text-[9px] font-semibold text-ink-mute">
+                          {dayBookings.length} {dayBookings.length === 1 ? 'booking' : 'bookings'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Time slot cells - Compact with spanning bookings */}
+                  {timeSlots.map((time, timeIdx) => {
+                    const booking = getBookingAt(day, time);
+                    const maintenance = getMaintenanceAt(day, time);
+
+                    // Skip if this slot is part of a booking that's already been rendered (not the start)
+                    if (booking && !isBookingStart(booking, time)) {
+                      return null;
+                    }
+
+                    // Skip if this slot is part of maintenance that's already been rendered (not the start)
+                    if (maintenance && maintenance.startTime !== time) {
+                      return null;
+                    }
+
+                    // If there's a booking starting at this time, render the full booking block spanning multiple slots
+                    if (booking && isBookingStart(booking, time)) {
+                      const meta = STATUS_META[booking.status];
+                      const cust = state.customers.find((c) => c.id === booking.customerId);
+                      const span = getBookingSpan(booking);
+
+                      return (
+                        <div
+                          key={time}
+                          className={cn(
+                            "shrink-0 border-r border-line-soft p-1 last:border-r-0",
+                            meta?.bg
+                          )}
+                          style={{ width: `${span * 80}px` }} // 80px = w-20 (compact)
+                        >
+                          <button
+                            onClick={() => setDrawer({ open: true, id: booking.id })}
+                            className={cn(
+                              "w-full h-full min-h-[40px] rounded border-l-4 p-1.5 text-left transition-all hover:shadow-md relative",
+                              meta?.fg,
+                              booking.status === 'completed' ? 'border-l-status-completed-fg' : 
+                                booking.status === 'checked_in' ? 'border-l-status-checkedin-fg' :
+                                booking.status === 'booked' ? 'border-l-status-booked-fg' :
+                                booking.status === 'payment_submitted' ? 'border-l-status-payment-fg' :
+                                booking.status === 'reserved' ? 'border-l-status-reserved-fg' : 'border-transparent'
+                            )}
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1">
+                                <div className={cn("h-1.5 w-1.5 rounded-full shrink-0", meta?.dot)} />
+                                <span className="text-[10px] font-bold truncate">
+                                  {cust?.name || "Customer"}
+                                </span>
+                              </div>
+                              <div className="text-[8px] opacity-75 truncate">
+                                {booking.totalPlayers}p · Rs {booking.amount.toLocaleString("en-PK")}
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    // If there's maintenance at this time, render it spanning multiple slots
+                    if (maintenance && maintenance.startTime === time) {
+                      const maintSpan = Math.ceil(
+                        (timeToMins(maintenance.endTime) - timeToMins(maintenance.startTime)) / 30
+                      );
+
+                      return (
+                        <div
+                          key={time}
+                          className="shrink-0 border-r border-line-soft p-1 last:border-r-0 bg-status-cancelled/10"
+                          style={{ width: `${maintSpan * 80}px` }}
+                        >
+                          <div className="w-full min-h-[40px] rounded border-l-4 border-status-cancelled-fg bg-status-cancelled/5 p-1.5">
+                            <div className="flex items-center gap-1 text-status-cancelled-fg">
+                              <Wrench className="h-3 w-3 shrink-0" />
+                              <span className="text-[9px] font-bold uppercase tracking-wider">
+                                Maint
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    // Empty cell - available for booking (white/clean)
+                    return (
+                      <div
+                        key={time}
+                        className="w-20 shrink-0 border-r border-line-soft last:border-r-0"
+                      >
+                        <button
+                          onClick={() =>
+                            setDrawer({
+                              open: true,
+                              id: null,
+                              prefill: { courtId: "C-01", date: day, startTime: time },
+                            })
+                          }
+                          className="w-full h-full min-h-[40px] transition-all group"
+                        >
+                          <div className="flex items-center justify-center h-full opacity-0 group-hover:opacity-100 transition-all">
+                            <Plus className="h-3 w-3 text-status-available-fg" />
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               );
-            }
-
-            return (
-              <div key={time} className="flex min-h-[64px] relative group">
-                {showNowLine && (
-                  <span className="absolute left-0 right-0 top-0 h-0.5 bg-clay z-10 shadow-sm shadow-clay/50 animate-pulse" />
-                )}
-                <div className="w-20 shrink-0 border-r border-line-soft p-3 text-right text-xs tabular text-ink-mute font-medium bg-canvas/30">
-                  {isHourStart ? fmtTime(time) : <span className="opacity-40">{time}</span>}
-                </div>
-                <button
-                  onClick={() =>
-                    setDrawer({
-                      open: true,
-                      id: null,
-                      prefill: { courtId: "C-01", date, startTime: time },
-                    })
-                  }
-                  className="flex-1 px-4 py-3 text-left transition-colors hover:bg-secondary/40 flex items-center justify-between text-ink-mute"
-                >
-                  <div className="flex items-center gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
-                    <span className="h-1.5 w-1.5 rounded-full bg-status-available-fg" />
-                    <span className="text-xs font-medium">Available for Booking</span>
-                  </div>
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-ink-mute opacity-0 group-hover:opacity-100 transition-opacity border border-line px-2 py-0.5 rounded bg-card hover:bg-secondary hover:text-ink">
-                    + Reserve Time
-                  </span>
-                </button>
-              </div>
-            );
-          })}
+            })}
+          </div>
         </div>
       </div>
 
-      <div className="mt-4 max-w-4xl flex flex-wrap items-center gap-x-5 gap-y-2.5 rounded-lg border border-line-soft bg-card/50 p-3 text-[11px] text-ink-mute">
-        {(["reserved", "payment_submitted", "booked", "checked_in", "completed"] as const).map(
-          (s) => (
-            <div key={s} className="flex items-center gap-1.5">
-              <span className={`h-2 w-2 rounded-full ${STATUS_META[s].dot}`} />
-              <span className="font-medium">{STATUS_META[s].label}</span>
-            </div>
-          ),
-        )}
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2.5 rounded-lg border border-line-soft bg-card/50 p-3 text-[11px] text-ink-mute">
         <div className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-status-cancelled-fg" />
+          <span className="h-2.5 w-2.5 rounded-full bg-status-available-fg" />
+          <span className="font-medium">Available</span>
+        </div>
+        {Object.entries(STATUS_META).map(([key, meta]) => (
+          <div key={key} className="flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} />
+            <span className="font-medium">{meta.label}</span>
+          </div>
+        ))}
+        <div className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-status-cancelled-fg" />
           <span className="font-medium">Maintenance</span>
         </div>
       </div>

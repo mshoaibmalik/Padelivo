@@ -4,21 +4,19 @@ import { useSettings } from "@/context/SettingsContext";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Card, CardHeader } from "@/components/app/Card";
 import { Button } from "@/components/app/Button";
-import { HOURS } from "@/data/seed";
-import { fmtTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
     meta: [
       { title: "Settings — Baseline" },
-      { name: "description", content: "Configure hours, pricing and appearance." },
+      { name: "description", content: "Configure pricing and appearance." },
     ],
   }),
   component: SettingsPage,
 });
 
-const TABS = ["Club Identity", "Hours & Slots", "Pricing Rules", "Appearance"] as const;
+const TABS = ["Club Identity", "Pricing Rules", "Appearance"] as const;
 
 function SettingsPage() {
   const { settings, update } = useSettings();
@@ -95,65 +93,7 @@ function SettingsPage() {
           </Card>
         )}
 
-        {/* TAB 2: Hours & Slots */}
-        {tab === "Hours & Slots" && (
-          <Card>
-            <CardHeader
-              title="Business hours"
-              subtitle="Configure operational boundaries for the scheduler grid"
-            />
-            <div className="grid grid-cols-2 gap-4 p-5">
-              <Field label="Opening Time">
-                <select
-                  value={settings.openingTime}
-                  onChange={(e) => update({ openingTime: e.target.value })}
-                  className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink"
-                >
-                  {HOURS.map((h) => (
-                    <option key={h} value={h}>
-                      {fmtTime(h)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Closing Time">
-                <select
-                  value={settings.closingTime}
-                  onChange={(e) => update({ closingTime: e.target.value })}
-                  className="h-9 w-full rounded-md border border-line bg-card px-2 text-sm text-ink"
-                >
-                  {HOURS.map((h) => (
-                    <option key={h} value={h}>
-                      {fmtTime(h)}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-
-              <Field label="Duration Increments">
-                <div className="flex items-center gap-2">
-                  {([30, 60] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => update({ slotMinutes: m as any })}
-                      className={cn(
-                        "h-9 rounded-md border px-4 text-xs font-semibold transition-colors",
-                        settings.slotMinutes === m
-                          ? "border-clay bg-clay-soft text-clay"
-                          : "border-line bg-card text-ink hover:bg-secondary",
-                      )}
-                    >
-                      {m} min slots
-                    </button>
-                  ))}
-                </div>
-              </Field>
-            </div>
-          </Card>
-        )}
-
-        {/* TAB 3: Pricing Rules */}
+        {/* TAB 2: Pricing Rules */}
         {tab === "Pricing Rules" && (
           <Card>
             <CardHeader
@@ -184,7 +124,7 @@ function SettingsPage() {
           </Card>
         )}
 
-        {/* TAB 4: Appearance */}
+        {/* TAB 3: Appearance */}
         {tab === "Appearance" && (
           <Card>
             <CardHeader title="System Theme" subtitle="Configure manager visual settings" />

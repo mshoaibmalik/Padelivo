@@ -43,6 +43,14 @@ export const addDaysISO = (iso: string, days: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+export const getWeekStart = (iso: string) => {
+  const d = new Date(iso);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  const monday = new Date(d.setDate(diff));
+  return monday.toISOString().slice(0, 10);
+};
+
 export const relativeTime = (iso: string) => {
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
   if (diff < 60) return "just now";

@@ -7,8 +7,8 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Baseline" },
-      { name: "description", content: "Sign in to Baseline padel club operations." },
+      { title: "Sign in — Padelivo" },
+      { name: "description", content: "Sign in to Padelivo padel club operations." },
     ],
   }),
   component: () => (
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const { manager, signIn } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("manager@baseline.pk");
+  const [email, setEmail] = useState("manager@padel.pk");
   const [password, setPassword] = useState("baseline");
   const [busy, setBusy] = useState(false);
 
@@ -48,9 +48,9 @@ function LoginPage() {
         >
           <div className="mb-8 flex items-center gap-2.5">
             <div className="grid h-9 w-9 place-items-center rounded-md bg-ink text-primary-foreground">
-              <span className="font-display text-xl leading-none">B</span>
+              <span className="font-display text-xl leading-none">P</span>
             </div>
-            <span className="font-display text-lg text-ink">Baseline</span>
+            <span className="font-display text-lg text-ink">Padelivo</span>
           </div>
           <div className="mb-8">
             <div className="text-[11px] font-medium uppercase tracking-[0.1em] text-ink-mute">
@@ -119,7 +119,7 @@ function LoginPage() {
         />
         <div className="relative flex h-full flex-col justify-between px-14 py-16 text-white/85">
           <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/50">
-            Baseline · Club OS
+            Padelivo · Club OS
           </div>
           <div>
             <div className="font-display text-5xl leading-[1.05] tracking-tight text-white">
