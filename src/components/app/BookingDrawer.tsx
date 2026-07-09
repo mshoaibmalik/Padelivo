@@ -8,11 +8,11 @@ import {
   Upload,
   Smartphone,
   Users,
-  DollarSign,
   CreditCard,
   Check,
   FileText,
   AlertCircle,
+  DollarSign,
 } from "lucide-react";
 import { useClub } from "@/context/ClubContext";
 import { useSettings } from "@/context/SettingsContext";
@@ -77,8 +77,8 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
   // Notes state
   const [notes, setNotes] = useState<string>("");
 
-  // Draft tracking
-  const [draftId, setDraftId] = useState<string | null>(null);
+  // Track whether user clicked "Mark Paid" — toggles footer button between Save Reservation / Confirm Booking
+  const [paymentMarked, setPaymentMarked] = useState(false);
 
   // Initialize fields on open/existing load
   useEffect(() => {
@@ -110,7 +110,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       setTransactionId("");
       setScreenshot(null);
       setNotes("");
-      setDraftId(null);
+      setPaymentMarked(false);
     }
     setShowAddCustomerForm(false);
   }, [existing, prefill, open]);
@@ -174,7 +174,6 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     for (const b of state.bookings) {
       if (b.status === "cancelled") continue;
       if (existing && b.id === existing.id) continue;
-      if (draftId && b.id === draftId) continue;
       if (b.date !== date) continue;
       busyRanges.push({ start: timeToMins(b.startTime), end: timeToMins(b.endTime) });
     }
@@ -223,7 +222,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     });
 
     return { busyRanges: merged, isFree, freeSlots, allSlots };
-  }, [state.bookings, state.maintenanceSlots, existing, draftId, date, startTime, durationHours]);
+  }, [state.bookings, state.maintenanceSlots, existing, date, startTime, durationHours]);
 
   // Check for overlaps (quick boolean for disabling save button)
   const isOverlapping = useMemo(() => {
@@ -243,58 +242,10 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     });
   }, [state.maintenanceSlots, date, startTime, durationHours]);
 
-  // Auto-save draft
-  useEffect(() => {
-    if (!selectedCustomerId || !date || !startTime || existing) return;
-
-    const timer = setTimeout(() => {
-      if (draftId) {
-        // Update existing draft
-        const draft = state.bookings.find((b) => b.id === draftId);
-        if (draft) {
-          dispatch({
-            type: "update_booking",
-            booking: {
-              ...draft,
-              customerId: selectedCustomerId,
-              date,
-              startTime,
-              endTime,
-              residents,
-              outsiders,
-              totalPlayers,
-              durationHours,
-              amount: pricingBreakdown.grandTotal,
-              notes: notes || undefined,
-            },
-          });
-        }
-      } else {
-        // Create new draft
-        const newDraftId = `B-${Math.floor(20000 + Math.random() * 9999)}`;
-        const booking: Booking = {
-          id: newDraftId,
-          customerId: selectedCustomerId,
-          courtId: "C-01",
-          date,
-          startTime,
-          endTime,
-          residents,
-          outsiders,
-          totalPlayers,
-          durationHours,
-          amount: pricingBreakdown.grandTotal,
-          status: "draft",
-          createdISO: new Date().toISOString(),
-          notes: notes || undefined,
-        };
-        dispatch({ type: "create_booking", booking });
-        setDraftId(newDraftId);
-      }
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [selectedCustomerId, date, startTime, durationHours, residents, outsiders, totalPlayers, notes]);
+  // Whether the action buttons should be shown (customer + time slot selected for new reservation)
+  const canShowActions = useMemo(() => {
+    return !existing && !!selectedCustomerId && !!date && !!startTime;
+  }, [existing, selectedCustomerId, date, startTime]);
 
   const addCustomerInline = () => {
     if (!newCustomer.name || !newCustomer.phone) return;
@@ -321,7 +272,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     if (next) dispatch({ type: "set_booking_status", id: existing.id, status: next });
   };
 
-  const save = () => {
+  const saveReservation = () => {
     if (!customer) return;
     if (isOverlapping) {
       alert("This time block overlaps with an existing booking. Please select a different time.");
@@ -336,73 +287,86 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       return;
     }
 
-    if (existing) {
-      dispatch({
-        type: "update_booking",
-        booking: {
-          ...existing,
-          customerId: customer.id,
-          date,
-          startTime,
-          endTime,
-          residents,
-          outsiders,
-          totalPlayers,
-          durationHours,
-          amount: pricingBreakdown.grandTotal,
-          notes: notes || undefined,
-        },
-      });
-    } else {
-      // Delete draft if exists and create final booking
-      if (draftId) {
-        const draft = state.bookings.find((b) => b.id === draftId);
-        if (draft && draft.status === "draft") {
-          dispatch({ type: "delete_booking", id: draftId });
-        }
-      }
+    const bId = `B-${Math.floor(20000 + Math.random() * 9999)}`;
+    const booking: Booking = {
+      id: bId,
+      customerId: customer.id,
+      courtId: "C-01",
+      date,
+      startTime,
+      endTime,
+      residents,
+      outsiders,
+      totalPlayers,
+      durationHours,
+      amount: pricingBreakdown.grandTotal,
+      status: "reserved",
+      createdISO: new Date().toISOString(),
+      notes: notes || undefined,
+    };
 
-      const bId = `B-${Math.floor(20000 + Math.random() * 9999)}`;
-      const booking: Booking = {
-        id: bId,
-        customerId: customer.id,
-        courtId: "C-01",
-        date,
-        startTime,
-        endTime,
-        residents,
-        outsiders,
-        totalPlayers,
-        durationHours,
-        amount: pricingBreakdown.grandTotal,
-        status: "reserved",
-        createdISO: new Date().toISOString(),
-        notes: notes || undefined,
-      };
-
-      dispatch({ type: "create_booking", booking });
-
-      // Create payment if method is not cash
-      if (paymentMethod !== "Cash" || transactionId) {
-        const paymentId = `P-${Date.now()}`;
-        const payment: Payment = {
-          id: paymentId,
-          bookingId: bId,
-          method: paymentMethod,
-          amount: pricingBreakdown.grandTotal,
-          transactionId: transactionId || `TXN-${Date.now()}`,
-          screenshotColor: screenshot || "#274060",
-          submittedISO: new Date().toISOString(),
-          status: "pending",
-        };
-        dispatch({ type: "create_payment", payment });
-        dispatch({
-          type: "update_booking",
-          booking: { ...booking, status: "payment_submitted", paymentId },
-        });
-      }
-    }
+    dispatch({ type: "create_booking", booking });
     onClose();
+  };
+
+  const confirmBooking = () => {
+    if (!customer) return;
+    if (isOverlapping) {
+      alert("This time block overlaps with an existing booking. Please select a different time.");
+      return;
+    }
+    if (isInMaintenance) {
+      alert("Main Court is scheduled for maintenance during this block.");
+      return;
+    }
+    if (!isPlayersCountValid) {
+      alert("Total players must be 2 or 4. Please adjust residents and outsiders.");
+      return;
+    }
+
+    const bId = `B-${Math.floor(20000 + Math.random() * 9999)}`;
+    const booking: Booking = {
+      id: bId,
+      customerId: customer.id,
+      courtId: "C-01",
+      date,
+      startTime,
+      endTime,
+      residents,
+      outsiders,
+      totalPlayers,
+      durationHours,
+      amount: pricingBreakdown.grandTotal,
+      status: "payment_submitted",
+      createdISO: new Date().toISOString(),
+      notes: notes || undefined,
+    };
+
+    dispatch({ type: "create_booking", booking });
+
+    // Create payment record
+    const paymentId = `P-${Date.now()}`;
+    const payment: Payment = {
+      id: paymentId,
+      bookingId: bId,
+      method: paymentMethod,
+      amount: pricingBreakdown.grandTotal,
+      transactionId: transactionId || `TXN-${Date.now()}`,
+      screenshotColor: screenshot || "#274060",
+      submittedISO: new Date().toISOString(),
+      status: "pending",
+    };
+    dispatch({ type: "create_payment", payment });
+    dispatch({
+      type: "update_booking",
+      booking: { ...booking, paymentId },
+    });
+
+    onClose();
+  };
+
+  const handleMarkPaid = () => {
+    setPaymentMarked(true);
   };
 
   const durationOptions = useMemo(() => {
@@ -443,11 +407,6 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                 <h2 className="text-lg font-display font-semibold text-ink mt-0.5 flex items-center gap-2">
                   <span>{existing?.id ?? "Court Reservation"}</span>
                   {existing && <StatusBadge status={existing.status} />}
-                  {draftId && !existing && (
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
-                      Draft
-                    </span>
-                  )}
                 </h2>
               </div>
               <button
@@ -915,6 +874,19 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                     />
                   </FormSection>
 
+                  {/* Mark Paid Button (only for new reservations when customer + time slot selected) */}
+                  {canShowActions && !paymentMarked && (
+                    <div className="pt-2">
+                      <button
+                        onClick={handleMarkPaid}
+                        className="w-full h-10 rounded-lg bg-clay text-sm font-semibold text-white hover:bg-clay/90 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <DollarSign className="h-4 w-4" />
+                        Mark Paid
+                      </button>
+                    </div>
+                  )}
+
                   {/* Admin Actions for Existing */}
                   {existing && (
                     <FormSection title="Administrative Actions" icon={<Wrench className="h-4 w-4" />}>
@@ -1063,24 +1035,63 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                 Cancel
               </Button>
 
-              {draftId && !existing && (
-                <div className="text-[10px] text-ink-mute font-medium">
-                  ✓ Draft saved
-                </div>
-              )}
-
-              <Button
-                variant={existing ? "secondary" : "clay"}
-                onClick={save}
-                disabled={
-                  !selectedCustomerId ||
-                  !isPlayersCountValid ||
-                  isOverlapping ||
-                  isInMaintenance
-                }
-              >
-                {existing ? "Save Changes" : "Confirm Booking"}
-              </Button>
+              {existing ? (
+                <Button
+                  variant="clay"
+                  onClick={() => {
+                    if (!customer) return;
+                    dispatch({
+                      type: "update_booking",
+                      booking: {
+                        ...existing,
+                        customerId: customer.id,
+                        date,
+                        startTime,
+                        endTime,
+                        residents,
+                        outsiders,
+                        totalPlayers,
+                        durationHours,
+                        amount: pricingBreakdown.grandTotal,
+                        notes: notes || undefined,
+                      },
+                    });
+                    onClose();
+                  }}
+                  disabled={
+                    !selectedCustomerId ||
+                    !isPlayersCountValid ||
+                    isOverlapping ||
+                    isInMaintenance
+                  }
+                >
+                  Save Changes
+                </Button>
+              ) : canShowActions && !paymentMarked ? (
+                <Button
+                  variant="clay"
+                  onClick={saveReservation}
+                  disabled={
+                    !isPlayersCountValid ||
+                    isOverlapping ||
+                    isInMaintenance
+                  }
+                >
+                  Save Reservation
+                </Button>
+              ) : canShowActions && paymentMarked ? (
+                <Button
+                  variant="clay"
+                  onClick={confirmBooking}
+                  disabled={
+                    !isPlayersCountValid ||
+                    isOverlapping ||
+                    isInMaintenance
+                  }
+                >
+                  Confirm Booking
+                </Button>
+              ) : null}
             </div>
           </motion.aside>
         </>

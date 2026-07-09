@@ -32,7 +32,8 @@ type Action =
   | { type: "create_customer"; customer: Customer }
   | { type: "create_maintenance_slot"; slot: MaintenanceSlot }
   | { type: "delete_maintenance_slot"; slotId: string }
-  | { type: "create_payment"; payment: Payment };
+  | { type: "create_payment"; payment: Payment }
+  | { type: "delete_booking"; id: string };
 
 const pushActivity = (state: State, msg: string, kind: Activity["kind"]): Activity[] =>
   [
@@ -158,6 +159,12 @@ const reducer = (state: State, action: Action): State => {
       return {
         ...state,
         maintenanceSlots: state.maintenanceSlots.filter((s) => s.id !== action.slotId),
+      };
+    }
+    case "delete_booking": {
+      return {
+        ...state,
+        bookings: state.bookings.filter((b) => b.id !== action.id),
       };
     }
     case "create_payment": {
