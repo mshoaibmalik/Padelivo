@@ -102,7 +102,7 @@ const customerNotes = [
 export const seedCourts = (): Court[] => [
   { id: "C-01", name: "Court 1 — Padel", surface: "Indoor", hourlyRate: 3500, status: "active" },
   { id: "C-02", name: "Court 2 — Glass", surface: "Indoor", hourlyRate: 3200, status: "active" },
-  { id: "C-03", name: "Court 3 — Pickle", surface: "Outdoor", hourlyRate: 2800, status: "active" },
+  { id: "C-03", name: "Court 3 — Pickle", surface: "Indoor", hourlyRate: 2800, status: "active" },
   { id: "C-04", name: "Court 4 — Basketball", surface: "Outdoor", hourlyRate: 2800, status: "active" },
 ];
 
