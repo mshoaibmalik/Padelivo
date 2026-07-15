@@ -35,6 +35,8 @@ function SettingsPage() {
   const [isEditing, setIsEditing] = useState<Court | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [courtNameInput, setCourtNameInput] = useState("");
+  const [nameError, setNameError] = useState("");
 
   const courts = state.courts;
 
@@ -53,6 +55,11 @@ function SettingsPage() {
   };
 
   const handleDelete = (courtId: string) => {
+    if (courts.length <= 1) {
+      toast.error("Cannot delete the last court. At least one court must remain in the system.");
+      setDeleteConfirm(null);
+      return;
+    }
     dispatch({ type: "delete_court", courtId });
     setDeleteConfirm(null);
     toast.success("Court deleted successfully");
@@ -300,8 +307,17 @@ function SettingsPage() {
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 
-                                  className="text-status-cancelled-fg hover:bg-status-cancelled/10 hover:text-status-cancelled-fg"
-                                  onClick={() => setDeleteConfirm(court.id)}
+                                  className={cn(
+                                    "text-status-cancelled-fg hover:bg-status-cancelled/10 hover:text-status-cancelled-fg",
+                                    courts.length <= 1 && "opacity-30 cursor-not-allowed"
+                                  )}
+                                  onClick={() => {
+                                    if (courts.length <= 1) {
+                                      toast.error("Cannot delete the last court. At least one court must remain in the system.");
+                                      return;
+                                    }
+                                    setDeleteConfirm(court.id);
+                                  }}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -331,7 +347,7 @@ function SettingsPage() {
             </p>
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-              <Button variant="primary" className="bg-status-cancelled text-white border-status-cancelled hover:bg-status-cancelled/90" onClick={() => handleDelete(deleteConfirm)}>
+              <Button variant="primary" className="bg-status-cancelled-fg text-white border-status-cancelled-fg hover:opacity-90" onClick={() => handleDelete(deleteConfirm)}>
                 Delete
               </Button>
             </div>
@@ -349,7 +365,7 @@ function SettingsPage() {
               </h3>
               <button 
                 className="text-ink-mute hover:text-ink"
-                onClick={() => { setIsEditing(null); setIsAdding(false); }}
+                onClick={() => { setIsEditing(null); setIsAdding(false); setCourtNameInput(""); setNameError(""); }}
               >
                 ✕
               </button>
@@ -362,8 +378,22 @@ function SettingsPage() {
                   required
                   name="name"
                   defaultValue={isEditing?.name}
-                  className="w-full rounded-md border border-line bg-card px-3 py-2 text-sm text-ink focus:border-clay focus:outline-none"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setCourtNameInput(val);
+                    const isDuplicate = courts.some(
+                      c => c.name.toLowerCase() === val.toLowerCase() && c.id !== (isEditing?.id || "")
+                    );
+                    setNameError(isDuplicate ? "A court with this name already exists. Please use a unique name." : "");
+                  }}
+                  className={cn(
+                    "w-full rounded-md border bg-card px-3 py-2 text-sm text-ink focus:outline-none",
+                    nameError ? "border-status-cancelled-fg focus:border-status-cancelled-fg" : "border-line focus:border-clay"
+                  )}
                 />
+                {nameError && (
+                  <p className="mt-1 text-xs text-status-cancelled-fg">{nameError}</p>
+                )}
               </label>
 
               <label className="block">
@@ -445,7 +475,7 @@ function SettingsPage() {
                 <Button variant="ghost" type="button" onClick={() => { setIsEditing(null); setIsAdding(false); }}>
                   Cancel
                 </Button>
-                <Button variant="clay" type="submit">
+                <Button variant="clay" type="submit" disabled={!!nameError}>
                   {isEditing ? "Save Changes" : "Add Court"}
                 </Button>
               </div>
