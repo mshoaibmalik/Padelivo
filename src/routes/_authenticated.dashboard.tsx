@@ -64,10 +64,11 @@ function DashboardPage() {
 
     const bookedCount = todays.length;
 
-    // Total operational hours today
+    // Total operational hours today across all active courts
     const startMins = timeToMins(settings.openingTime || "07:00");
     const endMins = timeToMins(settings.closingTime || "23:00");
-    const totalOperatingHours = (endMins - startMins) / 60;
+    const activeCourtsCount = state.courts.filter(c => c.status !== "disabled").length;
+    const totalOperatingHours = ((endMins - startMins) / 60) * activeCourtsCount;
 
     // Occupied hours
     const occupiedHours = todays.reduce((s, b) => s + b.durationHours, 0);
@@ -101,6 +102,7 @@ function DashboardPage() {
       occupancyPct,
       avgDuration,
       occupiedHours,
+      totalOperatingHours,
     };
   }, [state, today, settings.openingTime, settings.closingTime]);
 
@@ -127,8 +129,8 @@ function DashboardPage() {
     <>
       <PageHeader
         eyebrow={fmtDate(today)}
-        title="Main Court Dashboard"
-        description="Live snapshot of the single-court availability, revenue stats, and customer traffic."
+        title="Club Dashboard"
+        description="Live snapshot of the club's availability, revenue stats, and customer traffic."
         actions={undefined}
       />
 
@@ -253,7 +255,7 @@ function DashboardPage() {
 
         {/* Occupancy Card (Single Court visual summary) */}
         <Card>
-          <CardHeader title="Today's Court Status" subtitle="Main Court" />
+          <CardHeader title="Today's Club Status" subtitle="All Active Courts" />
           <div className="space-y-4 p-5 flex flex-col justify-between h-[230px]">
             <div>
               <div className="flex justify-between text-sm mb-1.5">
@@ -276,10 +278,7 @@ function DashboardPage() {
               <div className="flex justify-between">
                 <span className="text-ink-mute">Operating Limit</span>
                 <span className="text-ink font-semibold">
-                  {(timeToMins(settings.closingTime || "23:00") -
-                    timeToMins(settings.openingTime || "07:00")) /
-                    60}{" "}
-                  hours
+                  {stats.totalOperatingHours} hours
                 </span>
               </div>
               <div className="flex justify-between">

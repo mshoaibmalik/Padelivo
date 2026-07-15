@@ -17,8 +17,9 @@ import { Route as AuthenticatedReportsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated.dashboard'
 import { Route as AuthenticatedCustomersRouteImport } from './routes/_authenticated.customers'
 import { Route as AuthenticatedCourtsRouteImport } from './routes/_authenticated.courts'
-import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated.calendar'
 import { Route as AuthenticatedBookingsRouteImport } from './routes/_authenticated.bookings'
+import { Route as AuthenticatedCalendarIndexRouteImport } from './routes/_authenticated.calendar.index'
+import { Route as AuthenticatedCalendarCourtIdRouteImport } from './routes/_authenticated.calendar.$courtId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -59,38 +60,47 @@ const AuthenticatedCourtsRoute = AuthenticatedCourtsRouteImport.update({
   path: '/courts',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedCalendarRoute = AuthenticatedCalendarRouteImport.update({
-  id: '/calendar',
-  path: '/calendar',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
 const AuthenticatedBookingsRoute = AuthenticatedBookingsRouteImport.update({
   id: '/bookings',
   path: '/bookings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedCalendarIndexRoute =
+  AuthenticatedCalendarIndexRouteImport.update({
+    id: '/calendar/',
+    path: '/calendar/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCalendarCourtIdRoute =
+  AuthenticatedCalendarCourtIdRouteImport.update({
+    id: '/calendar/$courtId',
+    path: '/calendar/$courtId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/bookings': typeof AuthenticatedBookingsRoute
-  '/calendar': typeof AuthenticatedCalendarRoute
   '/courts': typeof AuthenticatedCourtsRoute
   '/customers': typeof AuthenticatedCustomersRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/calendar/$courtId': typeof AuthenticatedCalendarCourtIdRoute
+  '/calendar/': typeof AuthenticatedCalendarIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/bookings': typeof AuthenticatedBookingsRoute
-  '/calendar': typeof AuthenticatedCalendarRoute
   '/courts': typeof AuthenticatedCourtsRoute
   '/customers': typeof AuthenticatedCustomersRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/reports': typeof AuthenticatedReportsRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/calendar/$courtId': typeof AuthenticatedCalendarCourtIdRoute
+  '/calendar': typeof AuthenticatedCalendarIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,12 +108,13 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/bookings': typeof AuthenticatedBookingsRoute
-  '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/courts': typeof AuthenticatedCourtsRoute
   '/_authenticated/customers': typeof AuthenticatedCustomersRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/reports': typeof AuthenticatedReportsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/calendar/$courtId': typeof AuthenticatedCalendarCourtIdRoute
+  '/_authenticated/calendar/': typeof AuthenticatedCalendarIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -111,35 +122,38 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/bookings'
-    | '/calendar'
     | '/courts'
     | '/customers'
     | '/dashboard'
     | '/reports'
     | '/settings'
+    | '/calendar/$courtId'
+    | '/calendar/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/bookings'
-    | '/calendar'
     | '/courts'
     | '/customers'
     | '/dashboard'
     | '/reports'
     | '/settings'
+    | '/calendar/$courtId'
+    | '/calendar'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/bookings'
-    | '/_authenticated/calendar'
     | '/_authenticated/courts'
     | '/_authenticated/customers'
     | '/_authenticated/dashboard'
     | '/_authenticated/reports'
     | '/_authenticated/settings'
+    | '/_authenticated/calendar/$courtId'
+    | '/_authenticated/calendar/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -206,13 +220,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCourtsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/calendar': {
-      id: '/_authenticated/calendar'
-      path: '/calendar'
-      fullPath: '/calendar'
-      preLoaderRoute: typeof AuthenticatedCalendarRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/bookings': {
       id: '/_authenticated/bookings'
       path: '/bookings'
@@ -220,27 +227,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBookingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/calendar/': {
+      id: '/_authenticated/calendar/'
+      path: '/calendar'
+      fullPath: '/calendar/'
+      preLoaderRoute: typeof AuthenticatedCalendarIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/calendar/$courtId': {
+      id: '/_authenticated/calendar/$courtId'
+      path: '/calendar/$courtId'
+      fullPath: '/calendar/$courtId'
+      preLoaderRoute: typeof AuthenticatedCalendarCourtIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
   AuthenticatedBookingsRoute: typeof AuthenticatedBookingsRoute
-  AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedCourtsRoute: typeof AuthenticatedCourtsRoute
   AuthenticatedCustomersRoute: typeof AuthenticatedCustomersRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedReportsRoute: typeof AuthenticatedReportsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedCalendarCourtIdRoute: typeof AuthenticatedCalendarCourtIdRoute
+  AuthenticatedCalendarIndexRoute: typeof AuthenticatedCalendarIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedBookingsRoute: AuthenticatedBookingsRoute,
-  AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedCourtsRoute: AuthenticatedCourtsRoute,
   AuthenticatedCustomersRoute: AuthenticatedCustomersRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedReportsRoute: AuthenticatedReportsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedCalendarCourtIdRoute: AuthenticatedCalendarCourtIdRoute,
+  AuthenticatedCalendarIndexRoute: AuthenticatedCalendarIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

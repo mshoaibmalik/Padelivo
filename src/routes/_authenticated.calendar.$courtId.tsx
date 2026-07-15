@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useParams } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Wrench, Calendar, Plus } from "lucide-react";
 import { useClub } from "@/context/ClubContext";
@@ -12,14 +12,14 @@ import { STATUS_META } from "@/lib/status";
 import { addDaysISO, fmtDate, fmtTime, todayISO, getWeekStart } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_authenticated/calendar")({
+export const Route = createFileRoute("/_authenticated/calendar/$courtId")({
   head: () => ({
     meta: [
-      { title: "Calendar — Baseline" },
+      { title: "Court Schedule — Baseline" },
       { name: "description", content: "Weekly court schedule at a glance." },
     ],
   }),
-  component: CalendarPage,
+  component: CourtDetailCalendarPage,
 });
 
 // Helper functions for time conversion
@@ -36,8 +36,11 @@ const minsToTime = (m: number) => {
 
 type ViewMode = "weekly" | "monthly";
 
-function CalendarPage() {
+function CourtDetailCalendarPage() {
+  const { courtId } = Route.useParams();
   const { state, dispatch } = useClub();
+  
+  const court = state.courts.find(c => c.id === courtId);
   const { settings } = useSettings();
   const [weekStart, setWeekStart] = useState(() => getWeekStart(todayISO()));
   const [viewMode, setViewMode] = useState<ViewMode>("weekly");
@@ -93,7 +96,7 @@ function CalendarPage() {
   // Get bookings for a specific date and time slot
   const getBookingAt = (date: string, time: string) => {
     return state.bookings.find((b) => {
-      if (b.date !== date || b.status === "cancelled") return false;
+      if (b.courtId !== courtId || b.date !== date || b.status === "cancelled") return false;
       const timeMins = timeToMins(time);
       const startMins = timeToMins(b.startTime);
       const endMins = timeToMins(b.endTime);
@@ -104,7 +107,7 @@ function CalendarPage() {
   // Get maintenance at a specific date and time slot
   const getMaintenanceAt = (date: string, time: string) => {
     return state.maintenanceSlots.find((m) => {
-      if (m.date !== date) return false;
+      if (m.courtId !== courtId || m.date !== date) return false;
       const timeMins = timeToMins(time);
       const startMins = timeToMins(m.startTime);
       const endMins = timeToMins(m.endTime);
@@ -177,7 +180,7 @@ function CalendarPage() {
       <PageHeader
         eyebrow="Court Scheduler"
         title={viewMode === "weekly" ? "Weekly Court Schedule" : "Monthly Court Schedule"}
-        description="View the weekly matrix for the Main Court. Time slots are columns, dates are rows. Click any cell to reserve or view booking details."
+        description={`View the matrix for ${court?.name || 'Court'}. Time slots are columns, dates are rows. Click any cell to reserve or view booking details.`}
         actions={
           <div className="flex flex-col gap-2">
             {/* View mode toggle + Navigation */}
@@ -250,14 +253,20 @@ function CalendarPage() {
         <div className="border-b-2 border-line-soft bg-gradient-to-r from-canvas to-secondary px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-clay/10 p-2">
-                <Calendar className="h-6 w-6 text-clay" />
+              <div 
+                className="rounded-lg p-2"
+                style={{ backgroundColor: court?.courtColor ? `${court.courtColor}22` : 'var(--color-clay-soft)' }}
+              >
+                <Calendar className="h-6 w-6" style={{ color: court?.courtColor || 'var(--color-clay)' }} />
               </div>
               <div>
-                <span className="font-display text-2xl text-ink font-bold">Main Court Schedule</span>
+                <span className="font-display text-2xl text-ink font-bold">{court?.name || 'Court'} Schedule</span>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="rounded-full bg-blue-500/15 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300">
-                    Indoor
+                  <span className={cn(
+                    "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                    court?.surface === "Indoor" ? "bg-blue-500/15 text-blue-700 dark:text-blue-300" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                  )}>
+                    {court?.surface || "Indoor"}
                   </span>
                   <span className="text-xs text-ink-mute">
                     {timeSlots.length} time slots available
@@ -268,11 +277,11 @@ function CalendarPage() {
             <div className="flex items-center gap-6 text-xs">
               <div className="flex items-center gap-2 rounded-lg bg-status-available/10 px-3 py-2">
                 <div className="h-2.5 w-2.5 rounded-full bg-status-available-fg" />
-                <span className="font-medium text-ink">Residents: Rs {settings.residentRate}/hr</span>
+                <span className="font-medium text-ink">Residents: Rs {court?.residentPrice || settings.residentRate}/hr</span>
               </div>
               <div className="flex items-center gap-2 rounded-lg bg-status-booked/10 px-3 py-2">
                 <div className="h-2.5 w-2.5 rounded-full bg-status-booked-fg" />
-                <span className="font-medium text-ink">Outsiders: Rs {settings.outsiderRate}/hr</span>
+                <span className="font-medium text-ink">Outsiders: Rs {court?.outsiderPrice || settings.outsiderRate}/hr</span>
               </div>
             </div>
           </div>
@@ -308,9 +317,9 @@ function CalendarPage() {
               const isWeekend = dayDate.getDay() === 0 || dayDate.getDay() === 6;
               const isInCurrentWeek = isCurrentWeek(day);
               const dayBookings = state.bookings.filter(
-                (b) => b.date === day && b.status !== "cancelled"
+                (b) => b.courtId === courtId && b.date === day && b.status !== "cancelled"
               );
-              const dayMaintenance = state.maintenanceSlots.filter((m) => m.date === day);
+              const dayMaintenance = state.maintenanceSlots.filter((m) => m.courtId === courtId && m.date === day);
 
               return (
                 <div
@@ -494,7 +503,7 @@ function CalendarPage() {
           setDrawer({
             open: true,
             id: null,
-            prefill: { courtId: "C-01", date: slotMenu.date, startTime: slotMenu.startTime },
+            prefill: { courtId, date: slotMenu.date, startTime: slotMenu.startTime },
           });
           setSlotMenu({ open: false, position: null, date: "", startTime: "" });
         }}
@@ -511,6 +520,7 @@ function CalendarPage() {
 
       <MaintenanceDrawer
         open={maintenance.open}
+        courtId={courtId}
         date={maintenance.date}
         startTime={maintenance.startTime}
         onClose={() => setMaintenance({ open: false, date: "", startTime: "" })}

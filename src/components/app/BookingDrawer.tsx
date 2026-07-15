@@ -30,6 +30,12 @@ import {
   type Payment,
 } from "@/data/seed";
 import { cn } from "@/lib/utils";
+import {
+  hasBookingConflict,
+  hasMaintenanceConflict,
+  getAvailableSlotsForCourt,
+  getBusyRangesForCourt,
+} from "@/lib/booking-conflicts";
 
 type Props = {
   open: boolean;
@@ -59,6 +65,9 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     notes: "",
   });
 
+  // Court selection state
+  const [selectedCourtId, setSelectedCourtId] = useState<string>("");
+
   // Booking details state
   const [date, setDate] = useState<string>("");
   const [startTime, setStartTime] = useState<string>("");
@@ -85,6 +94,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     if (!open) return;
     if (existing) {
       setSelectedCustomerId(existing.customerId);
+      setSelectedCourtId(existing.courtId);
       setDate(existing.date);
       setStartTime(existing.startTime);
       setDurationHours(existing.durationHours);
@@ -100,6 +110,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       }
     } else {
       setSelectedCustomerId("");
+      setSelectedCourtId(prefill?.courtId || "");
       setSearchQuery("");
       setDate(prefill?.date ?? new Date().toISOString().slice(0, 10));
       setStartTime(prefill?.startTime ?? "18:00");
@@ -142,10 +153,14 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     return minsToTime(endMins);
   }, [startTime, durationHours]);
 
+  // Resolve the court being booked (from existing booking, prefill, user selection, or default)
+  const effectiveCourtId = selectedCourtId || existing?.courtId || prefill?.courtId || state.courts.find(c => c.status !== "disabled")?.id || "C-01";
+  const court = useMemo(() => state.courts.find(c => c.id === effectiveCourtId), [state.courts, effectiveCourtId]);
+
   // Auto-calculate costs
   const pricingBreakdown = useMemo(() => {
-    const resRate = settings.residentRate;
-    const outRate = settings.outsiderRate;
+    const resRate = court?.residentPrice ?? settings.residentRate;
+    const outRate = court?.outsiderPrice ?? settings.outsiderRate;
     const residentTotal = residents * resRate * durationHours;
     const outsiderTotal = outsiders * outRate * durationHours;
     const grandTotal = residentTotal + outsiderTotal;
@@ -156,91 +171,58 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       resRate,
       outRate,
     };
-  }, [residents, outsiders, durationHours, settings.residentRate, settings.outsiderRate]);
+  }, [residents, outsiders, durationHours, settings.residentRate, settings.outsiderRate, court]);
 
-  // Compute available time ranges for the selected date
+  // Compute available time ranges for the selected court and date
   const availableTimeRanges = useMemo<{
     busyRanges: { start: number; end: number }[];
     isFree: boolean;
     freeSlots: string[];
     allSlots: string[];
   }>(() => {
-    if (!date) return { busyRanges: [], isFree: true, freeSlots: [], allSlots: [] };
+    if (!date || !effectiveCourtId) return { busyRanges: [], isFree: true, freeSlots: [], allSlots: [] };
 
-    // Collect all busy ranges (bookings + maintenance) for the date
-    const busyRanges: { start: number; end: number }[] = [];
-
-    // Add bookings
-    for (const b of state.bookings) {
-      if (b.status === "cancelled") continue;
-      if (existing && b.id === existing.id) continue;
-      if (b.date !== date) continue;
-      busyRanges.push({ start: timeToMins(b.startTime), end: timeToMins(b.endTime) });
-    }
-
-    // Add maintenance
-    for (const m of state.maintenanceSlots) {
-      if (m.date !== date) continue;
-      busyRanges.push({ start: timeToMins(m.startTime), end: timeToMins(m.endTime) });
-    }
-
-    // Sort by start time
-    busyRanges.sort((a, b) => a.start - b.start);
-
-    // Merge overlapping ranges
-    const merged: { start: number; end: number }[] = [];
-    for (const r of busyRanges) {
-      if (merged.length === 0 || r.start > merged[merged.length - 1].end) {
-        merged.push({ ...r });
-      } else {
-        merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, r.end);
-      }
-    }
-
-    // Get all time slots from HOURS_OF_DAY (exclude last 00:00 which is next day)
     const allSlots = HOURS_OF_DAY.slice(0, -1);
+    const busyRanges = getBusyRangesForCourt(
+      state.bookings,
+      state.maintenanceSlots,
+      effectiveCourtId,
+      date,
+      existing?.id
+    );
 
-    // Determine which slots are available
     const startMins = timeToMins(startTime);
     const endMins = startMins + durationHours * 60;
+    const isFree = !busyRanges.some((r) => startMins < r.end && endMins > r.start);
 
-    // Check if current selection is free
-    const isFree = !merged.some((r) => startMins < r.end && endMins > r.start);
+    const freeSlots = getAvailableSlotsForCourt(
+      state.bookings,
+      state.maintenanceSlots,
+      effectiveCourtId,
+      date,
+      allSlots,
+      existing?.id
+    );
 
-    // Get available start times for at least 1-hour bookings (in 30-min increments)
-    const freeSlots = allSlots.filter((slot) => {
-      const slotStart = timeToMins(slot);
-      const minEnd = slotStart + 60; // minimum 1 hour
-      // Check if the full 1-hour block is free
-      for (let m = slotStart; m < minEnd; m += 30) {
-        const blockEnd = m + 30;
-        if (merged.some((r) => m < r.end && blockEnd > r.start)) {
-          return false;
-        }
-      }
-      return true;
-    });
-
-    return { busyRanges: merged, isFree, freeSlots, allSlots };
-  }, [state.bookings, state.maintenanceSlots, existing, date, startTime, durationHours]);
+    return { busyRanges, isFree, freeSlots, allSlots };
+  }, [state.bookings, state.maintenanceSlots, effectiveCourtId, date, startTime, durationHours, existing?.id]);
 
   // Check for overlaps (quick boolean for disabling save button)
   const isOverlapping = useMemo(() => {
     return !availableTimeRanges.isFree;
   }, [availableTimeRanges.isFree]);
 
-  // Check for maintenance (used in save validation and summary)
+  // Check for maintenance (used in save validation and summary) - court-specific
   const isInMaintenance = useMemo(() => {
-    return state.maintenanceSlots.some((m) => {
-      if (m.date !== date) return false;
-
-      const startA = timeToMins(startTime);
-      const endA = startA + durationHours * 60;
-      const startB = timeToMins(m.startTime);
-      const endB = timeToMins(m.endTime);
-      return startA < endB && endA > startB;
-    });
-  }, [state.maintenanceSlots, date, startTime, durationHours]);
+    if (!effectiveCourtId || !date) return false;
+    return hasMaintenanceConflict(
+      state.maintenanceSlots,
+      effectiveCourtId,
+      date,
+      startTime,
+      endTime
+    );
+  }, [state.maintenanceSlots, effectiveCourtId, date, startTime, endTime]);
 
   // Whether the action buttons should be shown (customer + time slot selected for new reservation)
   const canShowActions = useMemo(() => {
@@ -279,7 +261,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       return;
     }
     if (isInMaintenance) {
-      alert("Main Court is scheduled for maintenance during this block.");
+      alert("This court is scheduled for maintenance during this block.");
       return;
     }
     if (!isPlayersCountValid) {
@@ -288,10 +270,14 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     }
 
     const bId = `B-${Math.floor(20000 + Math.random() * 9999)}`;
+    const courtName = court?.name || "Unknown Court";
     const booking: Booking = {
       id: bId,
       customerId: customer.id,
-      courtId: "C-01",
+      courtId: effectiveCourtId,
+      courtName,
+      residentPrice: court?.residentPrice ?? settings.residentRate,
+      outsiderPrice: court?.outsiderPrice ?? settings.outsiderRate,
       date,
       startTime,
       endTime,
@@ -316,7 +302,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
       return;
     }
     if (isInMaintenance) {
-      alert("Main Court is scheduled for maintenance during this block.");
+      alert("This court is scheduled for maintenance during this block.");
       return;
     }
     if (!isPlayersCountValid) {
@@ -325,10 +311,14 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
     }
 
     const bId = `B-${Math.floor(20000 + Math.random() * 9999)}`;
+    const courtName = court?.name || "Unknown Court";
     const booking: Booking = {
       id: bId,
       customerId: customer.id,
-      courtId: "C-01",
+      courtId: effectiveCourtId,
+      courtName,
+      residentPrice: court?.residentPrice ?? settings.residentRate,
+      outsiderPrice: court?.outsiderPrice ?? settings.outsiderRate,
       date,
       startTime,
       endTime,
@@ -583,8 +573,8 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                             }
                             className="h-9 w-full rounded border border-line bg-card px-2 text-sm text-ink focus:border-clay focus:outline-none"
                           >
-                            <option value="Resident">Resident (Rs {settings.residentRate}/hr)</option>
-                            <option value="Outsider">Outsider (Rs {settings.outsiderRate}/hr)</option>
+                            <option value="Resident">Resident (Rs {court?.residentPrice ?? settings.residentRate}/hr)</option>
+                            <option value="Outsider">Outsider (Rs {court?.outsiderPrice ?? settings.outsiderRate}/hr)</option>
                           </select>
 
                           <textarea
@@ -630,6 +620,39 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                   {/* Booking Details Section */}
                   <FormSection title="Booking Details" icon={<FileText className="h-4 w-4" />}>
                     <div className="space-y-4">
+                      {/* Court Selector */}
+                      <div>
+                        <label className="text-[10px] uppercase font-semibold text-ink-mute block mb-1">
+                          Select Court *
+                        </label>
+                        <select
+                          value={effectiveCourtId}
+                          onChange={(e) => {
+                            setSelectedCourtId(e.target.value);
+                          }}
+                          className="h-10 w-full rounded-md border border-line bg-card px-2 text-sm text-ink focus:border-clay focus:outline-none"
+                        >
+                          <option value="">Select a court...</option>
+                          {state.courts
+                            .filter(c => c.status !== "disabled")
+                            .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                            .map(court => (
+                              <option key={court.id} value={court.id}>
+                                {court.name} ({court.surface}) - Rs {court.residentPrice}/hr
+                              </option>
+                            ))}
+                        </select>
+                        {court && (
+                          <div className="mt-1.5 flex items-center gap-2 text-[10px] text-ink-mute">
+                            <div 
+                              className="w-3 h-3 rounded-full border border-line"
+                              style={{ backgroundColor: court.courtColor || '#ccc' }}
+                            />
+                            <span>{court.location || 'No location'} • {court.surface}</span>
+                          </div>
+                        )}
+                      </div>
+
                       <div>
                         <label className="text-[10px] uppercase font-semibold text-ink-mute block mb-1">
                           Date
@@ -947,6 +970,16 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                     <div className="space-y-4">
                       {/* Quick Info */}
                       <div className="bg-card rounded-lg border border-line-soft p-4 space-y-2 text-xs">
+                        <Row k="Court" v={court?.name || "Not selected"} />
+                        {court && (
+                          <div className="flex items-center gap-1.5 pl-1">
+                            <div 
+                              className="w-2.5 h-2.5 rounded-full border border-line"
+                              style={{ backgroundColor: court.courtColor || '#ccc' }}
+                            />
+                            <span className="text-[10px] text-ink-mute">{court.surface} • {court.location || 'No location'}</span>
+                          </div>
+                        )}
                         <Row k="Customer" v={customer.name} />
                         <Row k="Category" v={customer.customerType} />
                         <Row k="Date" v={fmtDate(date)} />

@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useReducer, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useReducer, useEffect, type ReactNode } from "react";
 import {
   buildSeed,
   type Booking,
@@ -33,7 +33,11 @@ type Action =
   | { type: "create_maintenance_slot"; slot: MaintenanceSlot }
   | { type: "delete_maintenance_slot"; slotId: string }
   | { type: "create_payment"; payment: Payment }
-  | { type: "delete_booking"; id: string };
+  | { type: "delete_booking"; id: string }
+  | { type: "add_court"; court: Court }
+  | { type: "update_court"; court: Court }
+  | { type: "delete_court"; courtId: string }
+  | { type: "reorder_courts"; courts: Court[] };
 
 const pushActivity = (state: State, msg: string, kind: Activity["kind"]): Activity[] =>
   [
@@ -122,6 +126,33 @@ const reducer = (state: State, action: Action): State => {
         ),
       };
     }
+    case "add_court": {
+      return {
+        ...state,
+        courts: [...state.courts, action.court],
+        activity: pushActivity(state, `New court ${action.court.name} added`, "maintenance"),
+      };
+    }
+    case "update_court": {
+      return {
+        ...state,
+        courts: state.courts.map((c) => (c.id === action.court.id ? action.court : c)),
+        activity: pushActivity(state, `Court ${action.court.name} updated`, "maintenance"),
+      };
+    }
+    case "delete_court": {
+      return {
+        ...state,
+        courts: state.courts.filter((c) => c.id !== action.courtId),
+        activity: pushActivity(state, `Court deleted`, "maintenance"),
+      };
+    }
+    case "reorder_courts": {
+      return {
+        ...state,
+        courts: action.courts,
+      };
+    }
     case "update_customer_notes": {
       return {
         ...state,
@@ -179,8 +210,27 @@ const reducer = (state: State, action: Action): State => {
 type Ctx = { state: State; dispatch: React.Dispatch<Action> };
 const ClubCtx = createContext<Ctx | null>(null);
 
+const LOCAL_STORAGE_KEY = "padelivo_club_state";
+
+const init = () => {
+  const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.error("Failed to parse stored state, falling back to seed");
+    }
+  }
+  return buildSeed();
+};
+
 export const ClubProvider = ({ children }: { children: ReactNode }) => {
-  const [state, dispatch] = useReducer(reducer, undefined, buildSeed);
+  const [state, dispatch] = useReducer(reducer, undefined, init);
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+  }, [state]);
+
   const value = useMemo(() => ({ state, dispatch }), [state]);
   return <ClubCtx.Provider value={value}>{children}</ClubCtx.Provider>;
 };

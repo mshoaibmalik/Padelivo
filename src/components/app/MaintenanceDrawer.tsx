@@ -4,9 +4,11 @@ import { useClub } from "@/context/ClubContext";
 import { Button } from "@/components/app/Button";
 import { fmtDate, fmtTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { hasBookingConflict, hasMaintenanceConflict } from "@/lib/booking-conflicts";
 
 type Props = {
   open: boolean;
+  courtId: string;
   date: string;
   startTime: string;
   onClose: () => void;
@@ -23,7 +25,7 @@ const minsToTime = (m: number) => {
   return `${String(h).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 };
 
-export function MaintenanceDrawer({ open, date, startTime, onClose }: Props) {
+export function MaintenanceDrawer({ open, courtId, date, startTime, onClose }: Props) {
   const { state, dispatch } = useClub();
   const [durationMins, setDurationMins] = useState(30);
   const [reason, setReason] = useState("");
@@ -34,29 +36,31 @@ export function MaintenanceDrawer({ open, date, startTime, onClose }: Props) {
     return minsToTime(startMins + durationMins);
   }, [startTime, durationMins]);
 
-  // Check for overlaps with bookings and other maintenance
+  // Check for overlaps with bookings and other maintenance - court-specific
   const hasConflict = useMemo(() => {
     const startMins = timeToMins(startTime);
     const endMins = timeToMins(endTime);
 
-    // Check bookings
-    const bookingConflict = state.bookings.some((b) => {
-      if (b.date !== date || b.status === "cancelled") return false;
-      const bStart = timeToMins(b.startTime);
-      const bEnd = timeToMins(b.endTime);
-      return !(endMins <= bStart || startMins >= bEnd);
-    });
+    // Check bookings for this court only
+    const bookingConflict = hasBookingConflict(
+      state.bookings,
+      courtId,
+      date,
+      startTime,
+      endTime
+    );
 
-    // Check other maintenance
-    const maintConflict = state.maintenanceSlots.some((m) => {
-      if (m.date !== date) return false;
-      const mStart = timeToMins(m.startTime);
-      const mEnd = timeToMins(m.endTime);
-      return !(endMins <= mStart || startMins >= mEnd);
-    });
+    // Check other maintenance for this court only
+    const maintConflict = hasMaintenanceConflict(
+      state.maintenanceSlots,
+      courtId,
+      date,
+      startTime,
+      endTime
+    );
 
     return bookingConflict || maintConflict;
-  }, [date, startTime, endTime, state.bookings, state.maintenanceSlots]);
+  }, [date, startTime, endTime, courtId, state.bookings, state.maintenanceSlots]);
 
   const handleSave = async () => {
     if (hasConflict) return;
@@ -65,7 +69,7 @@ export function MaintenanceDrawer({ open, date, startTime, onClose }: Props) {
     try {
       const newMaintenance = {
         id: `M-${Date.now()}`,
-        courtId: "C-01",
+        courtId,
         date,
         startTime,
         endTime,

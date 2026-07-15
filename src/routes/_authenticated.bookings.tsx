@@ -105,6 +105,7 @@ function BookingsPage() {
               <tr className="border-b border-line-soft text-left text-[11px] font-medium uppercase tracking-[0.08em] text-ink-mute bg-canvas/20">
                 <th className="px-4 py-2.5">Booking</th>
                 <th className="px-4 py-2.5">Customer</th>
+                <th className="px-4 py-2.5">Court</th>
                 <th className="px-4 py-2.5">Schedule</th>
                 <th className="px-4 py-2.5">Duration</th>
                 <th className="px-4 py-2.5 text-center">Residents</th>
@@ -132,6 +133,9 @@ function BookingsPage() {
                           <div className="text-[11px] text-ink-mute font-mono">{cust?.phone}</div>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-3 font-semibold text-ink text-xs">
+                      {state.courts.find(c => c.id === b.courtId)?.name || b.courtId}
                     </td>
                     <td className="px-4 py-3 text-ink-soft tabular">
                       <div>{fmtDate(b.date)}</div>
@@ -172,7 +176,7 @@ function BookingsPage() {
                 <div className="min-w-0">
                   <div className="truncate text-sm text-ink font-semibold">{cust?.name}</div>
                   <div className="mt-0.5 text-[11px] text-ink-mute font-mono">
-                    {b.id} · {b.durationHours} hrs · {b.totalPlayers} players
+                    {b.id} · {state.courts.find(c => c.id === b.courtId)?.name} · {b.durationHours} hrs
                   </div>
                   <div className="text-[10px] text-ink-mute font-mono">
                     {fmtDate(b.date)} · {b.startTime} - {b.endTime}
