@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Calendar, MapPin, Plus } from "lucide-react";
 import { useClub } from "@/context/ClubContext";
 import { useSettings } from "@/context/SettingsContext";
@@ -55,6 +55,24 @@ function MultiCourtCalendarPage() {
   }>({ open: false, position: null, courtId: "", date: "", startTime: "" });
 
   const courts = state.courts.filter(c => c.status !== "disabled").sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+
+  // Redirect to single court view if only 1 court exists
+  useEffect(() => {
+    if (courts.length === 1) {
+      navigate({ to: `/calendar/${courts[0].id}` });
+    }
+  }, [courts.length, courts[0]?.id]);
+
+  // Calculate court width based on number of courts
+  const courtWidth = useMemo(() => {
+    const count = courts.length;
+    if (count >= 6) {
+      return "w-48"; // Fixed width for 6+ courts with horizontal scroll
+    } else if (count >= 2) {
+      return "flex-1"; // Equal division for 2-5 courts
+    }
+    return "flex-1"; // Default for 1 court
+  }, [courts.length]);
 
   const timeSlots = useMemo(() => {
     const startMins = timeToMins(settings.openingTime || "07:00");
@@ -153,7 +171,7 @@ function MultiCourtCalendarPage() {
               {courts.map(court => (
                 <div 
                   key={court.id} 
-                  className="w-48 shrink-0 border-r border-line-soft p-3 last:border-r-0 cursor-pointer hover:bg-clay-soft/10 transition-colors"
+                  className={cn("shrink-0 border-r border-line-soft p-3 last:border-r-0 cursor-pointer hover:bg-clay-soft/10 transition-colors", courtWidth)}
                   onClick={() => navigate({ to: `/calendar/${court.id}` })}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -210,7 +228,7 @@ function MultiCourtCalendarPage() {
                       return (
                         <div
                           key={`${court.id}-${time}`}
-                          className={cn("w-48 shrink-0 border-r border-line-soft p-1 last:border-r-0 relative z-10", meta?.bg)}
+                          className={cn("shrink-0 border-r border-line-soft p-1 last:border-r-0 relative z-10", courtWidth, meta?.bg)}
                           style={{ height: `${span * 48}px` }} // 48px is row height (h-12)
                         >
                           <div className={cn(
@@ -239,7 +257,7 @@ function MultiCourtCalendarPage() {
                       return (
                         <div
                           key={`${court.id}-${time}`}
-                          className="w-48 shrink-0 border-r border-line-soft p-1 last:border-r-0 bg-status-cancelled/10 relative z-10"
+                          className={cn("shrink-0 border-r border-line-soft p-1 last:border-r-0 bg-status-cancelled/10 relative z-10", courtWidth)}
                           style={{ height: `${span * 48}px` }}
                         >
                           <div className="w-full h-full rounded border-l-4 border-status-cancelled-fg bg-status-cancelled/5 p-1.5">
@@ -252,7 +270,7 @@ function MultiCourtCalendarPage() {
                     return (
                       <div 
                         key={`${court.id}-${time}`} 
-                        className="w-48 shrink-0 border-r border-line-soft last:border-r-0 hover:bg-clay-soft/20 transition-colors cursor-pointer relative"
+                        className={cn("shrink-0 border-r border-line-soft last:border-r-0 hover:bg-clay-soft/20 transition-colors cursor-pointer relative", courtWidth)}
                         onClick={(e) => {
                           e.stopPropagation();
                           const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();

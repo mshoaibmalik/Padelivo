@@ -213,13 +213,18 @@ const ClubCtx = createContext<Ctx | null>(null);
 const LOCAL_STORAGE_KEY = "padelivo_club_state";
 
 const init = () => {
-  const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (stored) {
-    try {
+  // Check if we're in a browser environment (SSR safety)
+  if (typeof localStorage === "undefined") {
+    return buildSeed();
+  }
+  
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (stored) {
       return JSON.parse(stored);
-    } catch (e) {
-      console.error("Failed to parse stored state, falling back to seed");
     }
+  } catch (e) {
+    console.error("Failed to parse stored state, falling back to seed");
   }
   return buildSeed();
 };

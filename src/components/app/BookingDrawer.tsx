@@ -638,7 +638,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                             .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
                             .map(court => (
                               <option key={court.id} value={court.id}>
-                                {court.name} ({court.surface}) - Rs {court.residentPrice}/hr
+                                {court.name}
                               </option>
                             ))}
                         </select>
