@@ -319,9 +319,6 @@ function SettingsPage() {
           </>
         )}
 
-        <div className="mt-6 flex justify-end">
-          <Button variant="clay">Save settings</Button>
-        </div>
       </div>
 
       {/* Delete Confirmation */}
