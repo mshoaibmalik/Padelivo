@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export type Settings = {
   openingTime: string;
@@ -28,18 +30,22 @@ type Ctx = {
 };
 
 const SettingsCtx = createContext<Ctx | null>(null);
-const KEY = "baseline.settings";
+const SETTINGS_DOC_ID = "default";
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) setSettings({ ...DEFAULTS, ...JSON.parse(raw) });
-    } catch {
-      /* ignore */
-    }
+    const ref = doc(db, "settings", SETTINGS_DOC_ID);
+    const unsub = onSnapshot(ref, (snap) => {
+      if (snap.exists()) {
+        setSettings({ ...DEFAULTS, ...snap.data() } as Settings);
+      } else {
+        // No settings doc yet — write defaults
+        setDoc(ref, DEFAULTS);
+      }
+    });
+    return unsub;
   }, []);
 
   useEffect(() => {
@@ -47,11 +53,10 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   }, [settings.theme]);
 
   const update = (patch: Partial<Settings>) => {
-    setSettings((s) => {
-      const next = { ...s, ...patch };
-      localStorage.setItem(KEY, JSON.stringify(next));
-      return next;
-    });
+    const ref = doc(db, "settings", SETTINGS_DOC_ID);
+    setDoc(ref, patch, { merge: true });
+    // Optimistic local update — onSnapshot will reconcile
+    setSettings((s) => ({ ...s, ...patch }));
   };
 
   return <SettingsCtx.Provider value={{ settings, update }}>{children}</SettingsCtx.Provider>;

@@ -1,6 +1,16 @@
-import { createContext, useContext, useMemo, useReducer, useEffect, type ReactNode } from "react";
 import {
-  buildSeed,
+  createContext,
+  useContext,
+  useMemo,
+  useReducer,
+  useEffect,
+  useState,
+  useCallback,
+  type ReactNode,
+} from "react";
+import { onSnapshot, collection, type DocumentData } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import {
   type Booking,
   type Court,
   type Customer,
@@ -9,6 +19,7 @@ import {
   type MaintenanceSlot,
 } from "@/data/seed";
 import type { BookingStatus } from "@/lib/status";
+import * as FSService from "@/lib/firestore-service";
 
 type State = {
   courts: Court[];
@@ -37,201 +48,152 @@ type Action =
   | { type: "add_court"; court: Court }
   | { type: "update_court"; court: Court }
   | { type: "delete_court"; courtId: string }
-  | { type: "reorder_courts"; courts: Court[] };
+  | { type: "reorder_courts"; courts: Court[] }
+  | { type: "hydrate"; collection: keyof Omit<State, "revenueHistory">; items: DocumentData[] };
 
-const pushActivity = (state: State, msg: string, kind: Activity["kind"]): Activity[] =>
-  [
-    {
-      id: `A-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      kind,
-      message: msg,
-      at: new Date().toISOString(),
-    },
-    ...state.activity,
-  ].slice(0, 60);
-
-const reducer = (state: State, action: Action): State => {
-  switch (action.type) {
-    case "set_booking_status": {
-      const bookings = state.bookings.map((b) =>
-        b.id === action.id ? { ...b, status: action.status } : b,
-      );
-      const b = bookings.find((x) => x.id === action.id);
-      const cust = state.customers.find((c) => c.id === b?.customerId);
-      const label = action.status.replace("_", " ");
-      return {
-        ...state,
-        bookings,
-        activity: pushActivity(
-          state,
-          `${cust?.name ?? "Booking"} → ${label} (${action.id})`,
-          action.status === "cancelled"
-            ? "cancel"
-            : action.status === "checked_in"
-              ? "checkin"
-              : "booking",
-        ),
-      };
-    }
-    case "verify_payment": {
-      const payments = state.payments.map((p) =>
-        p.id === action.paymentId ? { ...p, status: "verified" as const } : p,
-      );
-      const p = payments.find((x) => x.id === action.paymentId);
-      const bookings = state.bookings.map((b) =>
-        b.id === p?.bookingId ? { ...b, status: "booked" as BookingStatus } : b,
-      );
-      return {
-        ...state,
-        payments,
-        bookings,
-        activity: pushActivity(state, `Payment ${action.paymentId} verified`, "payment"),
-      };
-    }
-    case "reject_payment": {
-      const payments = state.payments.map((p) =>
-        p.id === action.paymentId ? { ...p, status: "rejected" as const } : p,
-      );
-      const p = payments.find((x) => x.id === action.paymentId);
-      const bookings = state.bookings.map((b) =>
-        b.id === p?.bookingId ? { ...b, status: "reserved" as BookingStatus } : b,
-      );
-      return {
-        ...state,
-        payments,
-        bookings,
-        activity: pushActivity(state, `Payment ${action.paymentId} rejected`, "payment"),
-      };
-    }
-    case "create_booking": {
-      return {
-        ...state,
-        bookings: [action.booking, ...state.bookings],
-        activity: pushActivity(state, `New reservation ${action.booking.id}`, "booking"),
-      };
-    }
-    case "update_booking": {
-      return {
-        ...state,
-        bookings: state.bookings.map((b) => (b.id === action.booking.id ? action.booking : b)),
-      };
-    }
-    case "toggle_court_maintenance": {
-      return {
-        ...state,
-        courts: state.courts.map((c) =>
-          c.id === action.courtId
-            ? { ...c, status: c.status === "active" ? "maintenance" : "active" }
-            : c,
-        ),
-      };
-    }
-    case "add_court": {
-      return {
-        ...state,
-        courts: [...state.courts, action.court],
-        activity: pushActivity(state, `New court ${action.court.name} added`, "maintenance"),
-      };
-    }
-    case "update_court": {
-      return {
-        ...state,
-        courts: state.courts.map((c) => (c.id === action.court.id ? action.court : c)),
-        activity: pushActivity(state, `Court ${action.court.name} updated`, "maintenance"),
-      };
-    }
-    case "delete_court": {
-      return {
-        ...state,
-        courts: state.courts.filter((c) => c.id !== action.courtId),
-        activity: pushActivity(state, `Court deleted`, "maintenance"),
-      };
-    }
-    case "reorder_courts": {
-      return {
-        ...state,
-        courts: action.courts,
-      };
-    }
-    case "update_customer_notes": {
-      return {
-        ...state,
-        customers: state.customers.map((c) =>
-          c.id === action.customerId ? { ...c, notes: action.notes } : c,
-        ),
-      };
-    }
-    case "update_customer": {
-      return {
-        ...state,
-        customers: state.customers.map((c) => (c.id === action.customer.id ? action.customer : c)),
-        activity: pushActivity(state, `Customer ${action.customer.name} updated`, "customer"),
-      };
-    }
-    case "create_customer": {
-      return {
-        ...state,
-        customers: [action.customer, ...state.customers],
-        activity: pushActivity(state, `New customer ${action.customer.name} added`, "customer"),
-      };
-    }
-    case "create_maintenance_slot": {
-      return {
-        ...state,
-        maintenanceSlots: [action.slot, ...state.maintenanceSlots],
-        activity: pushActivity(
-          state,
-          `Maintenance scheduled for court ${action.slot.courtId}`,
-          "maintenance",
-        ),
-      };
-    }
-    case "delete_maintenance_slot": {
-      return {
-        ...state,
-        maintenanceSlots: state.maintenanceSlots.filter((s) => s.id !== action.slotId),
-      };
-    }
-    case "delete_booking": {
-      return {
-        ...state,
-        bookings: state.bookings.filter((b) => b.id !== action.id),
-      };
-    }
-    case "create_payment": {
-      return {
-        ...state,
-        payments: [action.payment, ...state.payments],
-      };
-    }
-  }
+const INITIAL_STATE: State = {
+  courts: [],
+  customers: [],
+  bookings: [],
+  payments: [],
+  activity: [],
+  revenueHistory: [],
+  maintenanceSlots: [],
 };
 
-type Ctx = { state: State; dispatch: React.Dispatch<Action> };
+// Reducer only handles `hydrate` — all other actions write to Firestore
+// and propagate back via onSnapshot
+const reducer = (state: State, action: Action): State => {
+  if (action.type === "hydrate") {
+    return { ...state, [action.collection]: action.items };
+  }
+  return state;
+};
+
+type Ctx = { state: State; dispatch: React.Dispatch<Action>; loading: boolean };
 const ClubCtx = createContext<Ctx | null>(null);
 
-const LOCAL_STORAGE_KEY = "padelivo_club_state";
-
-const init = () => {
-  const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.error("Failed to parse stored state, falling back to seed");
-    }
-  }
-  return buildSeed();
-};
+const COLLECTIONS = [
+  "courts",
+  "customers",
+  "bookings",
+  "payments",
+  "activity",
+  "maintenanceSlots",
+] as const;
 
 export const ClubProvider = ({ children }: { children: ReactNode }) => {
-  const [state, dispatch] = useReducer(reducer, undefined, init);
+  const [state, rawDispatch] = useReducer(reducer, INITIAL_STATE);
+  const [loaded, setLoaded] = useState(0);
 
   useEffect(() => {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+    const unsubs = COLLECTIONS.map((name) =>
+      onSnapshot(collection(db, name), (snapshot) => {
+        const items = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+        rawDispatch({ type: "hydrate", collection: name, items });
+        setLoaded((prev) => prev + 1);
+      }),
+    );
+    return () => unsubs.forEach((u) => u());
+  }, []);
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+  // Wrapped dispatch — writes to Firestore, then onSnapshot auto-updates state
+  const dispatch = useCallback(async (action: Action) => {
+    // Fire-and-forget to Firestore; onSnapshot will trigger hydrate
+    try {
+      switch (action.type) {
+        case "set_booking_status":
+          await FSService.setBookingStatus(action.id, action.status);
+          break;
+        case "create_booking":
+          await FSService.createBooking(action.booking);
+          break;
+        case "update_booking":
+          await FSService.updateBooking(action.booking);
+          break;
+        case "delete_booking":
+          await FSService.deleteBooking(action.id);
+          break;
+        case "add_court":
+          await FSService.addCourt(action.court);
+          break;
+        case "update_court":
+          await FSService.updateCourt(action.court);
+          break;
+        case "delete_court":
+          await FSService.deleteCourt(action.courtId);
+          break;
+        case "reorder_courts":
+          await FSService.reorderCourts(action.courts);
+          break;
+        case "create_customer":
+          await FSService.createCustomer(action.customer);
+          break;
+        case "update_customer":
+          await FSService.updateCustomer(action.customer);
+          break;
+        case "update_customer_notes":
+          await FSService.updateCustomerNotes(action.customerId, action.notes);
+          break;
+        case "create_payment":
+          await FSService.createPayment(action.payment);
+          break;
+        case "verify_payment":
+          await FSService.verifyPayment(action.paymentId);
+          break;
+        case "reject_payment":
+          await FSService.rejectPayment(action.paymentId);
+          break;
+        case "create_maintenance_slot":
+          await FSService.createMaintenanceSlot(action.slot);
+          break;
+        case "delete_maintenance_slot":
+          await FSService.deleteMaintenanceSlot(action.slotId);
+          break;
+        case "hydrate":
+          // Handled directly by reducer — no Firestore write needed
+          rawDispatch(action);
+          break;
+        default:
+          break;
+      }
+    } catch (err) {
+      console.error(`❌ Firestore write failed for ${action.type}:`, err);
+      if (err instanceof Error) {
+        console.error("   →", err.message);
+      }
+    }
+  }, []);
+
+  // Derive revenueHistory from bookings
+  const revenueHistory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of state.bookings) {
+      if (b.status === "completed" || b.status === "checked_in" || b.status === "booked") {
+        map.set(b.date, (map.get(b.date) ?? 0) + b.amount);
+      }
+    }
+    const out: { date: string; revenue: number }[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = 29; i >= -3; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().slice(0, 10);
+      out.push({ date: iso, revenue: map.get(iso) ?? 0 });
+    }
+    return out;
+  }, [state.bookings]);
+
+  const value = useMemo(
+    () => ({
+      state: { ...state, revenueHistory },
+      dispatch,
+      loading: loaded < COLLECTIONS.length * 2,
+    }),
+    [state, revenueHistory, dispatch, loaded],
+  );
+
   return <ClubCtx.Provider value={value}>{children}</ClubCtx.Provider>;
 };
 

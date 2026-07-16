@@ -22,7 +22,7 @@ function AuthenticatedLayout() {
 
 function Gate() {
   const { manager } = useAuth();
-  if (typeof window !== "undefined" && !manager && !localStorage.getItem("baseline.manager")) {
+  if (!manager) {
     return <Navigate to="/login" replace />;
   }
   return (

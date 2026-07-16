@@ -24,16 +24,23 @@ function LoginPage() {
   const [email, setEmail] = useState("manager@padel.pk");
   const [password, setPassword] = useState("baseline");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   if (manager) return <Navigate to="/dashboard" replace />;
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    setTimeout(() => {
-      signIn(email);
+    setError("");
+    try {
+      await signIn(email, password);
       navigate({ to: "/dashboard" });
-    }, 350);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Sign-in failed. Check your credentials.";
+      setError(msg);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -94,6 +101,12 @@ function LoginPage() {
             />
           </label>
 
+          {error && (
+            <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {error}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={busy}
@@ -102,10 +115,6 @@ function LoginPage() {
             {busy ? "Signing in…" : "Sign in"}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </button>
-
-          <p className="mt-6 text-center text-[11px] text-ink-mute">
-            Prototype — any credentials will sign you in.
-          </p>
         </motion.form>
       </div>
 

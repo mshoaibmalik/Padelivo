@@ -53,6 +53,11 @@ function SettingsPage() {
   };
 
   const handleDelete = (courtId: string) => {
+    if (courts.length <= 1) {
+      toast.error("Cannot delete the last court. At least one court must remain in the system.");
+      setDeleteConfirm(null);
+      return;
+    }
     dispatch({ type: "delete_court", courtId });
     setDeleteConfirm(null);
     toast.success("Court deleted successfully");
@@ -300,8 +305,17 @@ function SettingsPage() {
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 
-                                  className="text-status-cancelled-fg hover:bg-status-cancelled/10 hover:text-status-cancelled-fg"
-                                  onClick={() => setDeleteConfirm(court.id)}
+                                  className={cn(
+                                    "text-status-cancelled-fg hover:bg-status-cancelled/10 hover:text-status-cancelled-fg",
+                                    courts.length <= 1 && "opacity-30 cursor-not-allowed"
+                                  )}
+                                  onClick={() => {
+                                    if (courts.length <= 1) {
+                                      toast.error("Cannot delete the last court. At least one court must remain in the system.");
+                                      return;
+                                    }
+                                    setDeleteConfirm(court.id);
+                                  }}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -319,9 +333,6 @@ function SettingsPage() {
           </>
         )}
 
-        <div className="mt-6 flex justify-end">
-          <Button variant="clay">Save settings</Button>
-        </div>
       </div>
 
       {/* Delete Confirmation */}
@@ -334,7 +345,7 @@ function SettingsPage() {
             </p>
             <div className="flex justify-end gap-3">
               <Button variant="ghost" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
-              <Button variant="primary" className="bg-status-cancelled text-white border-status-cancelled hover:bg-status-cancelled/90" onClick={() => handleDelete(deleteConfirm)}>
+              <Button variant="primary" className="bg-status-cancelled-fg text-white border-status-cancelled-fg hover:opacity-90" onClick={() => handleDelete(deleteConfirm)}>
                 Delete
               </Button>
             </div>
