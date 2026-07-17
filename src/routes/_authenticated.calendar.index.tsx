@@ -175,7 +175,7 @@ function MultiCourtCalendarPage() {
                   onClick={() => navigate({ to: `/calendar/${court.id}` })}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-display font-semibold text-ink line-clamp-1">{court.name}</span>
+                    <span className="font-display font-semibold text-ink line-clamp-1 text-2xl tracking-wide">{court.name}</span>
                     <div 
                       className="w-2.5 h-2.5 rounded-full border border-line"
                       style={{ backgroundColor: court.courtColor || '#ccc' }}
