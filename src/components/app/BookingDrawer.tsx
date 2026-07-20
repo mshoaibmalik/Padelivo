@@ -928,7 +928,7 @@ export function BookingDrawer({ open, onClose, bookingId, prefill }: Props): Rea
                           }}
                           className="flex-1 h-9 rounded border border-status-cancelled-fg/40 text-status-cancelled-fg text-xs font-semibold hover:bg-status-cancelled/15 transition-colors"
                         >
-                          Cancel
+                          Cancel Booking
                         </button>
                       </div>
                     </FormSection>
